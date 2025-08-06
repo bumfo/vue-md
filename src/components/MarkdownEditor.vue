@@ -319,7 +319,7 @@ export default {
 
       const previousType = this.getBlockType(previousElement)
 
-      if (previousType === 'paragraph' || previousType === 'heading') {
+      if (previousType === 'paragraph' || previousType === 'heading' || previousType === 'listitem') {
         // Store cursor position and extract clean content
         const cursorPositionText = previousElement.textContent.length
         const currentContent = this.extractInlineContent(blockElement)
@@ -745,11 +745,15 @@ export default {
               console.log('mergeWithPrevious: FINAL container HTML:', previousElement.innerHTML)
               
               // Check if there's a next container of the same type to merge
-              const nextSibling = previousElement.nextElementSibling
+              const previousContainer = previousElement.parentElement
+              const nextSibling = this.isContainerElement(previousContainer) ? 
+                previousContainer.nextElementSibling : previousElement.nextElementSibling
               console.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? nextSibling.tagName : 'null')
+              const containerToCompareWith = this.isContainerElement(previousContainer) ? 
+                previousContainer : previousElement
               if (nextSibling && 
                   this.isContainerElement(nextSibling) && 
-                  nextSibling.tagName === previousElement.tagName) {
+                  nextSibling.tagName === containerToCompareWith.tagName) {
                 console.log('mergeWithPrevious: merging next container into current')
                 // Get the first child that will be moved (for cursor positioning)
                 const firstChildToMove = nextSibling.firstChild
