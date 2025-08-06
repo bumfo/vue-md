@@ -398,7 +398,15 @@ export default {
     getPreviousBlockElement(element) {
       let prev = element.previousElementSibling
       while (prev) {
-        if (this.isBlockElement(prev)) return prev
+        if (this.isBlockElement(prev)) {
+          return prev
+        } else if (this.isContainerElement(prev)) {
+          // If previous sibling is a container, return the last block element inside it
+          const lastChild = prev.lastElementChild
+          if (lastChild && this.isBlockElement(lastChild)) {
+            return lastChild
+          }
+        }
         prev = prev.previousElementSibling
       }
       return null
