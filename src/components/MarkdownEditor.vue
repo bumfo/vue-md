@@ -242,6 +242,38 @@ export default {
 </script>
 
 <style>
+/* CSS Reset for markdown editor content */
+.markdown-editor * {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  vertical-align: baseline;
+  box-sizing: border-box;
+}
+
+.markdown-editor *,
+.markdown-editor *::before,
+.markdown-editor *::after {
+  box-sizing: inherit;
+}
+
+/* Ensure list styles are preserved after reset */
+.markdown-editor ul {
+  list-style-type: disc;
+}
+
+.markdown-editor ol {
+  list-style-type: decimal;
+}
+
+.markdown-editor ul ul,
+.markdown-editor ul ol,
+.markdown-editor ol ol,
+.markdown-editor ol ul {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
 .markdown-editor {
   padding: 20px;
   min-height: 459px;
@@ -260,16 +292,26 @@ export default {
   outline: none;
 }
 
+/* GitHub Markdown Styles - Applied after reset */
 .markdown-editor h1,
 .markdown-editor h2,
 .markdown-editor h3,
 .markdown-editor h4,
 .markdown-editor h5,
 .markdown-editor h6 {
-  margin: 0;
-  padding: 0;
+  margin-top: 24px;
+  margin-bottom: 16px;
   font-weight: 600;
   line-height: 1.25;
+}
+
+.markdown-editor h1:first-child,
+.markdown-editor h2:first-child,
+.markdown-editor h3:first-child,
+.markdown-editor h4:first-child,
+.markdown-editor h5:first-child,
+.markdown-editor h6:first-child {
+  margin-top: 0;
 }
 
 .markdown-editor h1 {
@@ -284,9 +326,53 @@ export default {
   padding-bottom: 0.3em;
 }
 
+.markdown-editor h3 {
+  font-size: 1.25em;
+}
+
+.markdown-editor h4 {
+  font-size: 1em;
+}
+
+.markdown-editor h5 {
+  font-size: 0.875em;
+}
+
+.markdown-editor h6 {
+  font-size: 0.85em;
+  color: #6a737d;
+}
+
+.markdown-editor p {
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
 .markdown-editor ul,
 .markdown-editor ol {
+  margin-top: 0;
+  margin-bottom: 16px;
   padding-left: 2em;
+}
+
+.markdown-editor li {
+  word-wrap: break-word;
+}
+
+.markdown-editor li > p {
+  margin-top: 16px;
+}
+
+.markdown-editor li + li {
+  margin-top: 0.25em;
+}
+
+.markdown-editor strong {
+  font-weight: 600;
+}
+
+.markdown-editor em {
+  font-style: italic;
 }
 
 .markdown-editor code {
@@ -295,9 +381,12 @@ export default {
   font-size: 85%;
   background-color: rgba(27, 31, 35, 0.05);
   border-radius: 3px;
+  font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', monospace;
 }
 
 .markdown-editor pre {
+  margin-top: 0;
+  margin-bottom: 16px;
   background-color: #f6f8fa;
   border-radius: 6px;
   padding: 16px;
@@ -306,10 +395,52 @@ export default {
   line-height: 1.45;
 }
 
+.markdown-editor pre code {
+  display: inline;
+  max-width: none;
+  padding: 0;
+  margin: 0;
+  overflow: visible;
+  line-height: inherit;
+  word-wrap: normal;
+  background-color: transparent;
+  border: 0;
+}
+
 .markdown-editor blockquote {
+  margin: 0 0 16px 0;
   padding: 0 1em;
   color: #6a737d;
   border-left: 0.25em solid #dfe2e5;
-  margin: 0;
+}
+
+.markdown-editor hr {
+  height: 0.25em;
+  padding: 0;
+  margin: 24px 0;
+  background-color: #e1e4e8;
+  border: 0;
+}
+
+.markdown-editor table {
+  border-spacing: 0;
+  border-collapse: collapse;
+  margin-top: 0;
+  margin-bottom: 16px;
+}
+
+.markdown-editor table th,
+.markdown-editor table td {
+  padding: 6px 13px;
+  border: 1px solid #dfe2e5;
+}
+
+.markdown-editor table th {
+  font-weight: 600;
+  background-color: #f6f8fa;
+}
+
+.markdown-editor table tr:nth-child(2n) {
+  background-color: #f6f8fa;
 }
 </style>
