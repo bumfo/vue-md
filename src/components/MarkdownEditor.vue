@@ -104,6 +104,233 @@ export default {
       this.internalHtml = html
       this.$emit('input', this.markdownContent)
     },
+    
+    handleBackspace(event) {
+      const selection = window.getSelection()
+      if (!selection.rangeCount) return false
+      
+      const range = selection.getRangeAt(0)
+      
+      // If there's a range selection, let default behavior handle it
+      if (!range.collapsed) {
+        return false  // Let browser handle selection deletion
+      }
+      
+      // Only handle single caret at block start
+      const { startContainer, startOffset } = range
+      const isAtBlockStart = this.isAtBlockStart(startContainer, startOffset)
+      
+      if (!isAtBlockStart.atStart) return false
+      
+      const blockElement = isAtBlockStart.blockElement
+      const blockType = this.getBlockType(blockElement)
+      
+      // Handle different block types according to markdown semantics
+      return this.handleBlockBackspace(blockElement, blockType)
+    },
+    
+    isAtBlockStart(container, offset) {
+      // If we're not at offset 0, check if we're at start of block
+      if (offset !== 0) return { atStart: false }
+      
+      // Find the block element containing the cursor
+      let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+      
+      while (element && element !== this.$refs.editor) {
+        if (this.isBlockElement(element)) {
+          // Check if cursor is truly at the start of this block's text content
+          const textBeforeCursor = this.getTextBeforeCursor(element, container, offset)
+          return { 
+            atStart: textBeforeCursor === '', 
+            blockElement: element 
+          }
+        }
+        element = element.parentElement
+      }
+      
+      return { atStart: false }
+    },
+    
+    getTextBeforeCursor(blockElement, container, offset) {
+      const walker = document.createTreeWalker(
+        blockElement,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      )
+      
+      let textBefore = ''
+      let currentNode
+      
+      while (currentNode = walker.nextNode()) {
+        if (currentNode === container) {
+          textBefore += currentNode.textContent.substring(0, offset)
+          break
+        } else {
+          textBefore += currentNode.textContent
+        }
+      }
+      
+      return textBefore.trim()
+    },
+    
+    isBlockElement(element) {
+      const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'LI']
+      return blockTags.includes(element.tagName)
+    },
+    
+    getBlockType(element) {
+      const tag = element.tagName
+      if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tag)) return 'heading'
+      if (tag === 'BLOCKQUOTE') return 'blockquote'
+      if (tag === 'PRE') return 'codeblock'
+      if (tag === 'LI') return 'listitem'
+      if (tag === 'P') return 'paragraph'
+      return 'unknown'
+    },
+    
+    handleBlockBackspace(blockElement, blockType) {
+      switch (blockType) {
+        case 'heading':
+        case 'blockquote':
+          return this.resetBlockToParagraph(blockElement)
+        case 'paragraph':
+          return this.mergeParagraphWithPrevious(blockElement)
+        case 'listitem':
+          return this.handleListItemBackspace(blockElement)
+        case 'codeblock':
+          return this.handleCodeBlockBackspace(blockElement)
+        default:
+          return false
+      }
+    },
+    
+    resetBlockToParagraph(blockElement) {
+      // Convert heading/blockquote to paragraph
+      const p = document.createElement('p')
+      p.innerHTML = blockElement.innerHTML || '<br>'
+      blockElement.parentNode.replaceChild(p, blockElement)
+      
+      // Position cursor at the start of the new paragraph
+      this.setCursorAtStart(p)
+      return true
+    },
+    
+    mergeParagraphWithPrevious(blockElement) {
+      const previousElement = this.getPreviousBlockElement(blockElement)
+      if (!previousElement) return false
+      
+      const previousType = this.getBlockType(previousElement)
+      
+      if (previousType === 'paragraph' || previousType === 'heading') {
+        // Merge content into previous element, keeping previous element's style
+        const cursorPosition = previousElement.textContent.length
+        previousElement.innerHTML += blockElement.innerHTML
+        blockElement.remove()
+        
+        // Position cursor at the merge point
+        this.setCursorPosition(previousElement, cursorPosition)
+        return true
+      }
+      
+      return false
+    },
+    
+    handleListItemBackspace(listItem) {
+      const list = listItem.parentElement
+      
+      if (listItem.previousElementSibling) {
+        // Merge with previous list item
+        const prevLi = listItem.previousElementSibling
+        const cursorPosition = prevLi.textContent.length
+        prevLi.innerHTML += listItem.innerHTML
+        listItem.remove()
+        this.setCursorPosition(prevLi, cursorPosition)
+        return true
+      } else {
+        // First item - convert to paragraph and remove from list
+        const p = document.createElement('p')
+        p.innerHTML = listItem.innerHTML || '<br>'
+        
+        if (list.children.length === 1) {
+          // Last item - replace entire list with paragraph
+          list.parentNode.replaceChild(p, list)
+        } else {
+          // Insert paragraph before list and remove item
+          list.parentNode.insertBefore(p, list)
+          listItem.remove()
+        }
+        
+        this.setCursorAtStart(p)
+        return true
+      }
+    },
+    
+    handleCodeBlockBackspace(codeBlock) {
+      const previousElement = this.getPreviousBlockElement(codeBlock)
+      if (previousElement && this.getBlockType(previousElement) === 'codeblock') {
+        // Merge with previous code block
+        const cursorPosition = previousElement.textContent.length
+        previousElement.innerHTML += '\n' + codeBlock.innerHTML
+        codeBlock.remove()
+        this.setCursorPosition(previousElement, cursorPosition)
+        return true
+      }
+      
+      // Convert to paragraph if no previous code block to merge with
+      return this.resetBlockToParagraph(codeBlock)
+    },
+    
+    getPreviousBlockElement(element) {
+      let prev = element.previousElementSibling
+      while (prev) {
+        if (this.isBlockElement(prev)) return prev
+        prev = prev.previousElementSibling
+      }
+      return null
+    },
+    
+    setCursorAtStart(element) {
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStart(element, 0)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+    },
+    
+    setCursorPosition(element, position) {
+      const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      )
+      
+      let currentPos = 0
+      let targetNode = null
+      let targetOffset = 0
+      
+      let node
+      while (node = walker.nextNode()) {
+        const nodeLength = node.textContent.length
+        if (currentPos + nodeLength >= position) {
+          targetNode = node
+          targetOffset = position - currentPos
+          break
+        }
+        currentPos += nodeLength
+      }
+      
+      if (targetNode) {
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.setStart(targetNode, targetOffset)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    },
 
     handleInput(event) {
       this.handleUserHtmlChange(event.target.innerHTML)
@@ -139,6 +366,17 @@ export default {
           this.handleUserHtmlChange(this.$refs.editor.innerHTML)
         })
         return
+      }
+      
+      if (event.key === 'Backspace') {
+        const handled = this.handleBackspace(event)
+        if (handled) {
+          event.preventDefault()
+          this.$nextTick(() => {
+            this.handleUserHtmlChange(this.$refs.editor.innerHTML)
+          })
+          return
+        }
       }
 
       if (event.key === 'Enter') {
