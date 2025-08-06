@@ -6,7 +6,6 @@
       @input="handleInput"
       @paste="handlePaste"
       @keydown="handleKeydown"
-      v-html="htmlContent"
   ></div>
 </template>
 
