@@ -104,64 +104,64 @@ export default {
       this.internalHtml = html
       this.$emit('input', this.markdownContent)
     },
-    
+
     handleBackspace(event) {
       const selection = window.getSelection()
       if (!selection.rangeCount) return false
-      
+
       const range = selection.getRangeAt(0)
-      
+
       // If there's a range selection, let default behavior handle it
       if (!range.collapsed) {
         return false  // Let browser handle selection deletion
       }
-      
+
       // Only handle single caret at block start
-      const { startContainer, startOffset } = range
+      const {startContainer, startOffset} = range
       const isAtBlockStart = this.isAtBlockStart(startContainer, startOffset)
-      
+
       if (!isAtBlockStart.atStart) return false
-      
+
       const blockElement = isAtBlockStart.blockElement
       const blockType = this.getBlockType(blockElement)
-      
+
       // Handle different block types according to markdown semantics
       return this.handleBlockBackspace(blockElement, blockType)
     },
-    
+
     isAtBlockStart(container, offset) {
       // If we're not at offset 0, check if we're at start of block
-      if (offset !== 0) return { atStart: false }
-      
+      if (offset !== 0) return {atStart: false}
+
       // Find the block element containing the cursor
       let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
-      
+
       while (element && element !== this.$refs.editor) {
         if (this.isBlockElement(element)) {
           // Check if cursor is truly at the start of this block's text content
           const textBeforeCursor = this.getTextBeforeCursor(element, container, offset)
-          return { 
-            atStart: textBeforeCursor === '', 
-            blockElement: element 
+          return {
+            atStart: textBeforeCursor === '',
+            blockElement: element
           }
         }
         element = element.parentElement
       }
-      
-      return { atStart: false }
+
+      return {atStart: false}
     },
-    
+
     getTextBeforeCursor(blockElement, container, offset) {
       const walker = document.createTreeWalker(
-        blockElement,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
+          blockElement,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
       )
-      
+
       let textBefore = ''
       let currentNode
-      
+
       while (currentNode = walker.nextNode()) {
         if (currentNode === container) {
           textBefore += currentNode.textContent.substring(0, offset)
@@ -170,20 +170,20 @@ export default {
           textBefore += currentNode.textContent
         }
       }
-      
+
       return textBefore.trim()
     },
-    
+
     isBlockElement(element) {
       const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'LI']
       return blockTags.includes(element.tagName)
     },
-    
+
     isContainerElement(element) {
       const containerTags = ['BLOCKQUOTE', 'OL', 'UL', 'PRE']
       return containerTags.includes(element.tagName)
     },
-    
+
     getBlockType(element) {
       const tag = element.tagName
       if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tag)) return 'heading'
@@ -193,8 +193,9 @@ export default {
       if (tag === 'P') return 'paragraph'
       return 'unknown'
     },
-    
+
     handleBlockBackspace(blockElement, blockType) {
+      console.log('block backspace', blockType)
       switch (blockType) {
         case 'heading':
         case 'blockquote':
@@ -209,13 +210,13 @@ export default {
           return false
       }
     },
-    
+
     resetBlockToParagraph(blockElement) {
       // Convert heading/blockquote to paragraph
       const p = document.createElement('p')
       p.innerHTML = blockElement.innerHTML || '<br>'
       blockElement.parentNode.replaceChild(p, blockElement)
-      
+
       // Position cursor at the start of the new paragraph
       this.setCursorAtStart(p)
       return true
@@ -226,35 +227,35 @@ export default {
       const p = document.createElement('p')
       p.innerHTML = '<br>'
       blockElement.parentNode.replaceChild(p, blockElement)
-      
+
       // Position cursor at the start of the new paragraph
       this.setCursorAtStart(p)
       return true
     },
-    
+
     mergeParagraphWithPrevious(blockElement) {
       // Check if this block is inside a container
       const blockContainer = blockElement.parentElement
       const isInContainer = this.isContainerElement(blockContainer)
-      
+
       if (isInContainer) {
         // If the block is the first/only child in a container, move it out of the container
         if (blockContainer.children.length === 1 || blockElement === blockContainer.firstElementChild) {
           // Move the block outside the container
           const newParagraph = document.createElement('p')
           newParagraph.innerHTML = blockElement.innerHTML || '<br>'
-          
+
           // Insert before the container
           blockContainer.parentNode.insertBefore(newParagraph, blockContainer)
-          
+
           // Remove the block from container
           blockElement.remove()
-          
+
           // If container is now empty, remove it
           if (blockContainer.textContent.trim() === '') {
             blockContainer.remove()
           }
-          
+
           // Now try to merge with the previous element again
           return this.mergeParagraphWithPrevious(newParagraph)
         } else {
@@ -263,7 +264,7 @@ export default {
           if (prevSibling && this.isBlockElement(prevSibling)) {
             const cursorPosition = prevSibling.textContent.length
             const currentContent = this.extractInlineContent(blockElement)
-            
+
             // Position cursor at end of previous element
             const range = document.createRange()
             const selection = window.getSelection()
@@ -271,33 +272,33 @@ export default {
             range.collapse(true)
             selection.removeAllRanges()
             selection.addRange(range)
-            
+
             // Use execCommand to insert the content
             document.execCommand('insertHTML', false, currentContent)
-            
+
             // Remove the now-empty block
             blockElement.remove()
-            
+
             // Position cursor at merge point
             this.setCursorPosition(prevSibling, cursorPosition)
             return true
           }
         }
-        
+
         return false
       }
-      
+
       // Standard merging for blocks not in containers
       const previousElement = this.getPreviousBlockElement(blockElement)
       if (!previousElement) return false
-      
+
       const previousType = this.getBlockType(previousElement)
-      
+
       if (previousType === 'paragraph' || previousType === 'heading') {
         // Store cursor position and extract clean content
         const cursorPositionText = previousElement.textContent.length
         const currentContent = this.extractInlineContent(blockElement)
-        
+
         // Position cursor at end of previous element
         const range = document.createRange()
         const selection = window.getSelection()
@@ -305,28 +306,28 @@ export default {
         range.collapse(true)
         selection.removeAllRanges()
         selection.addRange(range)
-        
+
         // Use execCommand to insert the cleaned content
         document.execCommand('insertHTML', false, currentContent)
-        
+
         // Use execCommand to delete the now-empty block
         const rangeToDelete = document.createRange()
         rangeToDelete.selectNode(blockElement)
         selection.removeAllRanges()
         selection.addRange(rangeToDelete)
         document.execCommand('delete')
-        
+
         // Position cursor at merge point
         this.setCursorPosition(previousElement, cursorPositionText)
         return true
       }
-      
+
       return false
     },
-    
+
     handleListItemBackspace(listItem) {
       const list = listItem.parentElement
-      
+
       if (listItem.previousElementSibling) {
         // Merge with previous list item
         const prevLi = listItem.previousElementSibling
@@ -339,7 +340,7 @@ export default {
         // First item - convert to paragraph and remove from list
         const p = document.createElement('p')
         p.innerHTML = listItem.innerHTML || '<br>'
-        
+
         if (list.children.length === 1) {
           // Last item - replace entire list with paragraph
           list.parentNode.replaceChild(p, list)
@@ -348,12 +349,12 @@ export default {
           list.parentNode.insertBefore(p, list)
           listItem.remove()
         }
-        
+
         this.setCursorAtStart(p)
         return true
       }
     },
-    
+
     handleCodeBlockBackspace(codeBlock) {
       const previousElement = this.getPreviousBlockElement(codeBlock)
       if (previousElement && this.getBlockType(previousElement) === 'codeblock') {
@@ -364,11 +365,11 @@ export default {
         this.setCursorPosition(previousElement, cursorPosition)
         return true
       }
-      
+
       // Convert to paragraph if no previous code block to merge with
       return this.resetBlockToParagraph(codeBlock)
     },
-    
+
     getPreviousBlockElement(element) {
       let prev = element.previousElementSibling
       while (prev) {
@@ -377,7 +378,7 @@ export default {
       }
       return null
     },
-    
+
     setCursorAtStart(element) {
       const range = document.createRange()
       const selection = window.getSelection()
@@ -386,19 +387,19 @@ export default {
       selection.removeAllRanges()
       selection.addRange(range)
     },
-    
+
     setCursorPosition(element, position) {
       const walker = document.createTreeWalker(
-        element,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
+          element,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
       )
-      
+
       let currentPos = 0
       let targetNode = null
       let targetOffset = 0
-      
+
       let node
       while (node = walker.nextNode()) {
         const nodeLength = node.textContent.length
@@ -409,7 +410,7 @@ export default {
         }
         currentPos += nodeLength
       }
-      
+
       if (targetNode) {
         const range = document.createRange()
         const selection = window.getSelection()
@@ -423,7 +424,7 @@ export default {
     extractInlineContent(element) {
       // Clone the element to avoid modifying the original
       const clone = element.cloneNode(true)
-      
+
       // Remove spans that only contain block-level styling (style attribute)
       const spans = clone.querySelectorAll('span[style]')
       spans.forEach(span => {
@@ -437,17 +438,17 @@ export default {
           parent.removeChild(span)
         }
       })
-      
+
       return clone.innerHTML
     },
 
     isBlockLevelStyling(styleString) {
       if (!styleString) return false
-      
+
       const blockStyles = [
         'font-size',
         'font-weight: 600',
-        'font-weight: bold', 
+        'font-weight: bold',
         'font-weight: 700',
         'margin',
         'padding',
@@ -455,37 +456,37 @@ export default {
         'color: rgb(106, 115, 125)', // blockquote color
         'line-height'
       ]
-      
-      return blockStyles.some(blockStyle => 
-        styleString.includes(blockStyle)
+
+      return blockStyles.some(blockStyle =>
+          styleString.includes(blockStyle)
       ) && !this.hasInlineStyles(styleString)
     },
 
     hasInlineStyles(styleString) {
       const inlineStyles = [
         'font-weight: bold',
-        'font-weight: 600', 
+        'font-weight: 600',
         'font-weight: 700',
         'font-style: italic',
         'text-decoration: underline',
         'text-decoration: line-through'
       ]
-      
-      return inlineStyles.some(inlineStyle => 
-        styleString.includes(inlineStyle)
+
+      return inlineStyles.some(inlineStyle =>
+          styleString.includes(inlineStyle)
       )
     },
 
     isAtEndOfInlineElement(range) {
       if (!range.collapsed) return false
-      
+
       const container = range.startContainer
       const offset = range.startOffset
-      
+
       // Check if cursor is at the end of a text node
       if (container.nodeType === Node.TEXT_NODE) {
         if (offset !== container.textContent.length) return false
-        
+
         // Check if this text node is inside an inline element
         let parent = container.parentElement
         while (parent && parent !== this.$refs.editor) {
@@ -497,36 +498,36 @@ export default {
           parent = parent.parentElement
         }
       }
-      
+
       return false
     },
 
     isInlineStyleElement(element) {
       const inlineTags = ['STRONG', 'EM', 'B', 'I', 'CODE', 'U', 'S']
       if (inlineTags.includes(element.tagName)) return true
-      
+
       // Check for spans with inline styling
       if (element.tagName === 'SPAN' && element.hasAttribute('style')) {
         return this.hasInlineStyles(element.getAttribute('style'))
       }
-      
+
       return false
     },
 
     isLastTextInElement(textNode, element) {
       const walker = document.createTreeWalker(
-        element,
-        NodeFilter.SHOW_TEXT,
-        null,
-        false
+          element,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
       )
-      
+
       let lastTextNode = null
       let node
       while (node = walker.nextNode()) {
         lastTextNode = node
       }
-      
+
       return textNode === lastTextNode
     },
 
@@ -537,7 +538,7 @@ export default {
 
     handleEnter(range) {
       const container = range.commonAncestorContainer
-      
+
       // Priority 1: Check if we're in a list item (highest priority)
       let parentLi = null
       if (container.nodeType === Node.TEXT_NODE) {
@@ -571,61 +572,61 @@ export default {
       let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
       let foundBlock = null
       let containerElement = null
-      
+
       // Walk up to find the innermost block element and its container
       while (currentElement && currentElement !== this.$refs.editor) {
         if (this.isBlockElement(currentElement)) {
           const blockType = this.getBlockType(currentElement)
-          
+
           // The innermost block element is the actual markdown block
           if (!foundBlock) {
             foundBlock = currentElement
           }
-          
+
           // Check if this block is inside a container (blockquote, ol, ul, pre)
           const parent = currentElement.parentElement
           if (parent && this.isContainerElement(parent)) {
             containerElement = parent
           }
-          
+
           break // We found the innermost block, no need to continue
         }
         currentElement = currentElement.parentElement
       }
-      
+
       // Only return if the block is empty and styled (not a plain paragraph in root)
       if (foundBlock && foundBlock.textContent.trim() === '') {
         const blockType = this.getBlockType(foundBlock)
         const hasContainer = containerElement !== null
-        
+
         // If it's a styled block OR a paragraph inside a container, it needs conversion
         if (blockType !== 'paragraph' || hasContainer) {
-          return { block: foundBlock, container: containerElement }
+          return {block: foundBlock, container: containerElement}
         }
       }
-      
+
       return null
     },
 
     handleEmptyBlockEnter(blockInfo) {
-      const { block, container } = blockInfo
-      
+      const {block, container} = blockInfo
+
       if (container) {
         // Block is inside a container - move it outside the container
         const newParagraph = document.createElement('p')
         newParagraph.innerHTML = '<br>'
-        
+
         // Insert the new paragraph after the container
         container.parentNode.insertBefore(newParagraph, container.nextSibling)
-        
+
         // Remove the block from the container
         block.remove()
-        
+
         // If container is now empty, remove it too
         if (container.textContent.trim() === '') {
           container.remove()
         }
-        
+
         // Position cursor in the new paragraph
         this.setCursorAtStart(newParagraph)
         return true
@@ -636,7 +637,7 @@ export default {
         range.selectNode(block)
         selection.removeAllRanges()
         selection.addRange(range)
-        
+
         // Use execCommand to replace with paragraph
         document.execCommand('formatBlock', false, 'p')
         return true
@@ -718,7 +719,7 @@ export default {
         })
         return
       }
-      
+
       if (event.key === 'Backspace') {
         const handled = this.handleBackspace(event)
         if (handled) {
