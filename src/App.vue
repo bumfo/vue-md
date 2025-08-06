@@ -10,34 +10,33 @@
       </div>
       
       <div class="editor-wrapper">
-        <div v-if="viewMode === 'editor'" class="editor-pane">
-          <div
-            ref="editor"
-            class="markdown-editor"
-            contenteditable="true"
-            @input="handleInput"
-            @paste="handlePaste"
-            @keydown="handleKeydown"
-            v-html="htmlContent"
-          ></div>
+        <div v-if="viewMode === 'editor'" class="editor-layout">
+          <div class="editor-pane">
+            <div
+              ref="editor"
+              class="markdown-editor"
+              contenteditable="true"
+              @input="handleInput"
+              @paste="handlePaste"
+              @keydown="handleKeydown"
+              v-html="htmlContent"
+            ></div>
+          </div>
+          <div class="textarea-pane">
+            <div class="textarea-header">Raw Markdown</div>
+            <textarea 
+              ref="debugTextarea"
+              v-model="markdownContent"
+              @input="handleDebugInput"
+              class="debug-textarea"
+              placeholder="Enter your markdown here..."
+            ></textarea>
+          </div>
         </div>
         
         <div v-if="viewMode === 'preview'" class="preview-pane">
           <div class="markdown-body" v-html="previewHtml"></div>
         </div>
-      </div>
-      
-      <div class="debug-info">
-        <details>
-          <summary>Debug: Raw Markdown</summary>
-          <textarea 
-            ref="debugTextarea"
-            v-model="markdownContent"
-            @input="handleDebugInput"
-            class="debug-textarea"
-            placeholder="Enter your markdown here..."
-          ></textarea>
-        </details>
       </div>
     </div>
   </div>
@@ -263,13 +262,8 @@ export default {
     },
     
     resizeTextarea() {
-      this.$nextTick(() => {
-        const textarea = this.$refs.debugTextarea
-        if (textarea) {
-          textarea.style.height = 'auto'
-          textarea.style.height = textarea.scrollHeight + 'px'
-        }
-      })
+      // In side-by-side layout, textarea height is managed by CSS
+      // No need for dynamic resizing as it fills the available space
     },
     
     toggleView() {
@@ -377,7 +371,34 @@ body {
   min-height: 500px;
 }
 
-.editor-pane,
+.editor-layout {
+  display: flex;
+  height: 100%;
+  gap: 1px;
+}
+
+.editor-pane {
+  flex: 1;
+  background: white;
+}
+
+.textarea-pane {
+  flex: 1;
+  background: white;
+  border-left: 1px solid #e1e4e8;
+}
+
+.textarea-header {
+  padding: 10px 15px;
+  background: #f6f8fa;
+  border-bottom: 1px solid #e1e4e8;
+  font-size: 12px;
+  font-weight: 600;
+  color: #586069;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
 .preview-pane {
   height: 100%;
 }
@@ -404,30 +425,13 @@ body {
   background: white;
 }
 
-.debug-info {
-  padding: 15px 20px;
-  background: #f6f8fa;
-  border-top: 1px solid #e1e4e8;
-}
-
-.debug-info details {
-  margin: 0;
-}
-
-.debug-info summary {
-  cursor: pointer;
-  font-weight: 600;
-  color: #586069;
-  margin-bottom: 10px;
-}
-
-.debug-info .debug-textarea {
+.debug-textarea {
   width: 100%;
-  min-height: 100px;
-  background: #f3f4f6;
-  padding: 10px;
-  border: 1px solid #e1e4e8;
-  border-radius: 4px;
+  height: calc(100% - 41px); /* Subtract header height */
+  min-height: 459px; /* Match editor min-height minus header */
+  background: white;
+  padding: 20px;
+  border: none;
   font-size: 12px;
   line-height: 1.4;
   color: #24292e;
@@ -438,9 +442,8 @@ body {
   box-sizing: border-box;
 }
 
-.debug-info .debug-textarea:focus {
-  border-color: #0366d6;
-  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.1);
+.debug-textarea:focus {
+  outline: none;
 }
 
 .markdown-editor h1,
