@@ -195,21 +195,26 @@ export default {
     },
 
     handleBlockBackspace(blockElement, blockType) {
-      console.log('block backspace', blockType)
+      console.log('block backspace', blockType, 'element:', blockElement.tagName, 'parent:', blockElement.parentElement.tagName)
       
       const container = blockElement.parentElement
       const isInContainer = this.isContainerElement(container)
       
+      console.log('isInContainer:', isInContainer, 'container:', container.tagName)
+      
       if (isInContainer) {
         // Block is inside a container - exit the container
+        console.log('Calling exitContainer')
         return this.exitContainer(blockElement, container)
       } else {
         // Block is at root level
         if (blockType === 'paragraph') {
           // Paragraph at root - merge with previous
+          console.log('Calling mergeWithPrevious')
           return this.mergeWithPrevious(blockElement)
         } else {
           // Styled block at root (h1-h6, blockquote, pre) - reset to paragraph
+          console.log('Calling resetBlockToParagraph')
           return this.resetBlockToParagraph(blockElement)
         }
       }
@@ -547,14 +552,30 @@ export default {
       const newParagraph = document.createElement('p')
       newParagraph.innerHTML = content || '<br>'
       
-      // Standard container exit - insert AFTER the container (not before)
-      container.parentNode.insertBefore(newParagraph, container.nextSibling)
+      // Check if we need to split the container (block is in the middle)
+      const remainingItems = []
+      let nextItem = blockElement.nextElementSibling
+      while (nextItem) {
+        const temp = nextItem.nextElementSibling
+        remainingItems.push(nextItem)
+        nextItem = temp
+      }
       
-      // Remove the block from container
+      // Remove the current block
       blockElement.remove()
       
-      // If container is now empty, remove it
-      if (container.textContent.trim() === '') {
+      // Insert paragraph after the current container
+      container.parentNode.insertBefore(newParagraph, container.nextSibling)
+      
+      // If there are remaining items, create a new container after the paragraph
+      if (remainingItems.length > 0) {
+        const newContainer = document.createElement(container.tagName)
+        remainingItems.forEach(item => newContainer.appendChild(item))
+        container.parentNode.insertBefore(newContainer, newParagraph.nextSibling)
+      }
+      
+      // If original container is now empty, remove it
+      if (container.children.length === 0) {
         container.remove()
       }
       
