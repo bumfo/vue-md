@@ -30,7 +30,13 @@
       <div class="debug-info">
         <details>
           <summary>Debug: Raw Markdown</summary>
-          <pre>{{ markdownContent }}</pre>
+          <textarea 
+            ref="debugTextarea"
+            v-model="markdownContent"
+            @input="handleDebugInput"
+            class="debug-textarea"
+            placeholder="Enter your markdown here..."
+          ></textarea>
         </details>
       </div>
     </div>
@@ -62,6 +68,9 @@ export default {
   mounted() {
     this.initializeServices()
     this.updateHtmlFromMarkdown()
+    this.$nextTick(() => {
+      this.resizeTextarea()
+    })
   },
   methods: {
     initializeServices() {
@@ -247,6 +256,22 @@ export default {
       }, 500)
     },
     
+    handleDebugInput() {
+      this.resizeTextarea()
+      // The v-model already handles the two-way binding
+      // No need to manually update markdownContent
+    },
+    
+    resizeTextarea() {
+      this.$nextTick(() => {
+        const textarea = this.$refs.debugTextarea
+        if (textarea) {
+          textarea.style.height = 'auto'
+          textarea.style.height = textarea.scrollHeight + 'px'
+        }
+      })
+    },
+    
     toggleView() {
       this.viewMode = this.viewMode === 'editor' ? 'preview' : 'editor'
       if (this.viewMode === 'editor') {
@@ -396,15 +421,26 @@ body {
   margin-bottom: 10px;
 }
 
-.debug-info pre {
+.debug-info .debug-textarea {
+  width: 100%;
+  min-height: 100px;
   background: #f3f4f6;
   padding: 10px;
+  border: 1px solid #e1e4e8;
   border-radius: 4px;
   font-size: 12px;
   line-height: 1.4;
   color: #24292e;
-  overflow-x: auto;
+  font-family: 'SF Mono', Monaco, Consolas, 'Liberation Mono', monospace;
+  resize: none;
+  outline: none;
   margin: 0;
+  box-sizing: border-box;
+}
+
+.debug-info .debug-textarea:focus {
+  border-color: #0366d6;
+  box-shadow: 0 0 0 2px rgba(3, 102, 214, 0.1);
 }
 
 .markdown-editor h1,
