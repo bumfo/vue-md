@@ -61,8 +61,13 @@ export default {
     }
   },
   
-  mounted() {
+  created() {
     this.initializeServices()
+  },
+  
+  mounted() {
+    // Initialize from prop after DOM and services are ready
+    this.markdownContent = this.value
   },
   methods: {
     initializeServices() {
@@ -224,7 +229,7 @@ export default {
         // External prop change - update internal state via computed setter
         this.markdownContent = newValue
       },
-      immediate: true
+      immediate: false
     }
   }
 }
