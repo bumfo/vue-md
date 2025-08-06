@@ -47,30 +47,58 @@ Vue.js 2.0 markdown editor with contenteditable support. This project provides a
 
 ## Two-Way Binding Design Philosophy
 
-### The Core Problem
-Vue's reactive system can destroy caret position in contenteditable elements when user actions trigger DOM updates through reactive bindings.
+### The Universal Problem
+In two-way binding scenarios, the same data change can originate from two sources:
+1. **User interactions** (typing, clicking, dragging)
+2. **Programmatic updates** (prop changes, external API)
 
-### Design Principle: Separate User and Programmatic Paths
-**User actions should only update internal state. Programmatic actions should only update the DOM.**
+When both paths trigger the same reactive updates, you get:
+- Lost UI state (caret position, selection, scroll position)
+- Performance issues (unnecessary re-renders)
+- Circular update loops
+- Race conditions
 
-### Architecture Pattern
+### Core Design Principle: Path Separation
+**User actions and programmatic updates must follow completely different code paths.**
 
-#### State Management
-- Use internal state variables for current content (not reactive to DOM)
-- Never store computed/derived values - always compute on-demand
-- Computed properties with get/set handle conversions and DOM manipulation
+### The Pattern
 
-#### Path Separation
-- **User path**: Events → internal state → emit changes (no DOM updates)
-- **Programmatic path**: Props → computed setters → manual DOM updates
-- **Comparison gates**: Setters compare before updating to prevent circular updates
+#### 1. Dual State Architecture
+- **Internal state**: What the user directly manipulates (never triggers reactive DOM updates)
+- **External interface**: Props/events for parent communication
+- **Computed bridge**: Handles conversion and routing between the two
 
-#### Critical Implementation Details
-- Initialize services in `created()` before any DOM access
-- Remove `v-html` and reactive DOM bindings from contenteditable elements  
-- Use `$refs` for manual DOM updates in computed setters only
-- DRY principle: Extract common user action handlers
-- Fail fast: Require services to be initialized, don't silently handle missing dependencies
+#### 2. Asymmetric Update Paths
+- **User → Parent**: Internal state → Compute/Transform → Emit event
+- **Parent → User**: Prop → Compare → Transform → Manual DOM update
+- Never let these paths merge or trigger each other
 
-### Flow Summary
-User interactions preserve caret position by avoiding DOM updates, while external prop changes properly update the DOM through manual manipulation. The key insight is that the same content change should follow completely different update paths depending on its source.
+#### 3. The Comparison Gate
+The critical safeguard: Compare before updating to break circular chains.
+```
+if (newValue !== computedCurrentValue) { 
+  // Only then update
+}
+```
+
+#### 4. Manual DOM Control
+For UI elements that maintain state (contenteditable, canvas, video players):
+- Remove reactive bindings (`v-html`, `v-model`)
+- Use refs for manual DOM updates
+- Update DOM only in the programmatic path
+
+### Why This Works
+
+**User types** → Updates internal state → Computes new value → Emits to parent → Parent updates prop → Comparison gate sees no change → No DOM update → UI state preserved
+
+**External update** → Prop changes → Comparison gate sees difference → Manual DOM update → UI updates correctly
+
+### Application Beyond Contenteditable
+
+This pattern applies to any component where:
+- User interaction state must be preserved (slider position during drag, video playback during seek)
+- The same data can be modified from multiple sources
+- Reactive updates would destroy important UI state
+- You need precise control over when DOM updates occur
+
+The key insight: **The source of a change determines its update path, not the data itself.**
