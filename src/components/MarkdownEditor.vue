@@ -644,10 +644,14 @@ export default {
       console.log('mergeWithPrevious: previousContainer is container?', this.isContainerElement(previousContainer))
       console.log('mergeWithPrevious: currentContainer is container?', this.isContainerElement(currentContainer))
       
-      // Only merge within the same container or both at root - never cross containers
+      // Allow merging in these cases:
+      // 1. Same exact container (within container merging)
+      // 2. Both at root (root level merging)  
+      // 3. Root paragraph merging into container (cross-boundary merging)
       const canMerge = (
         (previousContainer === currentContainer) || // Same exact container
-        (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) // Both at root
+        (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) || // Both at root
+        (this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) // Root paragraph into container
       )
       
       console.log('mergeWithPrevious: canMerge:', canMerge)
@@ -710,7 +714,8 @@ export default {
           if (hasContent) {
             // Non-empty paragraph - merge content into the last block of the previous container
             console.log('mergeWithPrevious: merging content into previous container')
-            const lastChild = previousElement.lastElementChild
+            const previousContainer = previousElement.parentElement
+            const lastChild = previousContainer.lastElementChild
             console.log('mergeWithPrevious: lastChild:', lastChild ? lastChild.tagName : 'null')
             console.log('mergeWithPrevious: lastChild innerHTML:', lastChild ? lastChild.innerHTML : 'null')
             console.log('mergeWithPrevious: lastChild is block?', lastChild ? this.isBlockElement(lastChild) : 'null')
@@ -742,10 +747,9 @@ export default {
               this.setCursorPosition(lastChild, cursorPosition)
               console.log('mergeWithPrevious: repositioned cursor')
               console.log('mergeWithPrevious: FINAL lastChild innerHTML:', lastChild.innerHTML)
-              console.log('mergeWithPrevious: FINAL container HTML:', previousElement.innerHTML)
+              console.log('mergeWithPrevious: FINAL container HTML:', previousContainer.innerHTML)
               
               // Check if there's a next container of the same type to merge
-              const previousContainer = previousElement.parentElement
               const nextSibling = this.isContainerElement(previousContainer) ? 
                 previousContainer.nextElementSibling : previousElement.nextElementSibling
               console.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? nextSibling.tagName : 'null')
