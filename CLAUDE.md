@@ -41,5 +41,36 @@ Vue.js 2.0 markdown editor with contenteditable support. This project provides a
 - `package.json` - Project dependencies and scripts
 - `src/main.js` - Application entry point (Vue 2 instance creation)
 - `src/App.vue` - Main editor component with markdown functionality
+- `src/components/MarkdownEditor.vue` - Extracted markdown editor component
 - `vite.config.js` - Vite configuration with Vue 2 plugin
 - `index.html` - HTML template entry point
+
+## Two-Way Binding Design Philosophy
+
+### The Core Problem
+Vue's reactive system can destroy caret position in contenteditable elements when user actions trigger DOM updates through reactive bindings.
+
+### Design Principle: Separate User and Programmatic Paths
+**User actions should only update internal state. Programmatic actions should only update the DOM.**
+
+### Architecture Pattern
+
+#### State Management
+- Use internal state variables for current content (not reactive to DOM)
+- Never store computed/derived values - always compute on-demand
+- Computed properties with get/set handle conversions and DOM manipulation
+
+#### Path Separation
+- **User path**: Events → internal state → emit changes (no DOM updates)
+- **Programmatic path**: Props → computed setters → manual DOM updates
+- **Comparison gates**: Setters compare before updating to prevent circular updates
+
+#### Critical Implementation Details
+- Initialize services in `created()` before any DOM access
+- Remove `v-html` and reactive DOM bindings from contenteditable elements  
+- Use `$refs` for manual DOM updates in computed setters only
+- DRY principle: Extract common user action handlers
+- Fail fast: Require services to be initialized, don't silently handle missing dependencies
+
+### Flow Summary
+User interactions preserve caret position by avoiding DOM updates, while external prop changes properly update the DOM through manual manipulation. The key insight is that the same content change should follow completely different update paths depending on its source.
