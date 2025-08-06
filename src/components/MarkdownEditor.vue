@@ -736,6 +736,21 @@ export default {
               console.log('mergeWithPrevious: FINAL lastChild innerHTML:', lastChild.innerHTML)
               console.log('mergeWithPrevious: FINAL container HTML:', previousElement.innerHTML)
               
+              // Check if there's a next container of the same type to merge
+              const nextSibling = previousElement.nextElementSibling
+              console.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? nextSibling.tagName : 'null')
+              if (nextSibling && 
+                  this.isContainerElement(nextSibling) && 
+                  nextSibling.tagName === previousElement.tagName) {
+                console.log('mergeWithPrevious: merging next container into current')
+                // Move all children from next container to current container
+                while (nextSibling.firstChild) {
+                  previousElement.appendChild(nextSibling.firstChild)
+                }
+                nextSibling.remove()
+                console.log('mergeWithPrevious: removed next container after merge')
+              }
+
               // Sync DOM changes back to Vue state
               this.handleUserHtmlChange(this.$refs.editor.innerHTML)
               console.log('mergeWithPrevious: synced DOM to Vue state')
