@@ -562,11 +562,9 @@ export default {
       // Check for container merging after the operation
       this.mergeAdjacentContainers(newParagraph)
       
-      // Position cursor and try to merge with previous
+      // Position cursor - but DON'T auto-merge when exiting container
+      // User should manually backspace again if they want to merge with previous root element
       this.setCursorAtStart(newParagraph)
-      this.$nextTick(() => {
-        this.mergeWithPrevious(newParagraph)
-      })
       
       return true
     },
@@ -676,24 +674,36 @@ export default {
     
     mergeAdjacentContainers(referenceElement) {
       // Check if operation created adjacent containers of same type that should be merged
-      let current = referenceElement
+      // This only applies when removing paragraphs between same-type containers
+      const current = referenceElement
       
-      // Check previous sibling
+      // Only merge when the referenceElement is a paragraph (not in container)
+      if (current.tagName !== 'P' || this.isContainerElement(current.parentElement)) {
+        return // Don't merge if not a root paragraph
+      }
+      
       const prevSibling = current.previousElementSibling
-      if (prevSibling && this.isContainerElement(prevSibling)) {
-        const nextSibling = current.nextElementSibling
-        if (nextSibling && this.isContainerElement(nextSibling) && 
-            prevSibling.tagName === nextSibling.tagName) {
-          // We have container + paragraph + same-container -> merge containers
-          
-          // Move all children from nextSibling to prevSibling
-          while (nextSibling.firstChild) {
-            prevSibling.appendChild(nextSibling.firstChild)
-          }
-          
-          // Remove the paragraph and second container
-          current.remove()
-          nextSibling.remove()
+      const nextSibling = current.nextElementSibling
+      
+      // Check if we have: same-container + paragraph + same-container
+      if (prevSibling && nextSibling &&
+          this.isContainerElement(prevSibling) && 
+          this.isContainerElement(nextSibling) &&
+          prevSibling.tagName === nextSibling.tagName) {
+        
+        // Move all children from nextSibling to prevSibling
+        while (nextSibling.firstChild) {
+          prevSibling.appendChild(nextSibling.firstChild)
+        }
+        
+        // Remove the paragraph and second container
+        current.remove()
+        nextSibling.remove()
+        
+        // Position cursor in the merged container
+        const lastChild = prevSibling.lastElementChild
+        if (lastChild) {
+          this.setCursorAtStart(lastChild)
         }
       }
     },
