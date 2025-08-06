@@ -587,9 +587,9 @@ export default {
         console.log('exitContainer: removed empty container')
       }
       
-      // Don't call mergeAdjacentContainers for exitContainer operations
-      // The exitContainer operation intentionally creates split structure that should be preserved
-      console.log('exitContainer: skipping mergeAdjacentContainers - preserving split structure')
+      console.log('exitContainer: calling mergeAdjacentContainers with preserveSplit=true')
+      // Check for container merging after the operation, but preserve split from container exits
+      this.mergeAdjacentContainers(newParagraph, true)
       
       // Position cursor
       this.setCursorAtStart(newParagraph)
@@ -709,12 +709,19 @@ export default {
       return true
     },
     
-    mergeAdjacentContainers(referenceElement) {
+    mergeAdjacentContainers(referenceElement, preserveSplit = false) {
       // Only merge containers when we have an empty paragraph at root level between same-type containers
       // This handles the case: blockquote(p1), p2(empty), blockquote(p3) → blockquote(p1, p3)
       const current = referenceElement
       console.log('mergeAdjacentContainers: current element:', current.tagName, 'innerHTML:', current.innerHTML)
       console.log('mergeAdjacentContainers: current parent:', current.parentElement.tagName)
+      console.log('mergeAdjacentContainers: preserveSplit:', preserveSplit)
+      
+      // If preserveSplit is true (from exitContainer), don't merge
+      if (preserveSplit) {
+        console.log('mergeAdjacentContainers: preserveSplit=true, preserving split structure from container exit')
+        return
+      }
       
       // Only consider root-level paragraphs
       if (current.tagName !== 'P' || this.isContainerElement(current.parentElement)) {
