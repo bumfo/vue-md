@@ -710,50 +710,14 @@ export default {
     },
     
     mergeAdjacentContainers(referenceElement) {
-      // Check if operation created adjacent containers of same type that should be merged
-      // This only applies when removing paragraphs between same-type containers
-      const current = referenceElement
-      console.log('mergeAdjacentContainers: current element:', current.tagName, 'innerHTML:', current.innerHTML)
-      console.log('mergeAdjacentContainers: current parent:', current.parentElement.tagName)
-      
-      // Only merge when the referenceElement is a paragraph (not in container)
-      if (current.tagName !== 'P' || this.isContainerElement(current.parentElement)) {
-        console.log('mergeAdjacentContainers: not a root paragraph, returning')
-        return // Don't merge if not a root paragraph
-      }
-      
-      const prevSibling = current.previousElementSibling
-      const nextSibling = current.nextElementSibling
-      console.log('mergeAdjacentContainers: prevSibling:', prevSibling ? prevSibling.tagName : 'null')
-      console.log('mergeAdjacentContainers: nextSibling:', nextSibling ? nextSibling.tagName : 'null')
-      
-      // Check if we have: same-container + paragraph + same-container
-      // Only merge if the paragraph is empty (no meaningful content)
-      if (prevSibling && nextSibling &&
-          this.isContainerElement(prevSibling) && 
-          this.isContainerElement(nextSibling) &&
-          prevSibling.tagName === nextSibling.tagName &&
-          (current.textContent.trim() === '' || current.innerHTML === '<br>')) {
-        
-        console.log('mergeAdjacentContainers: MERGING containers!')
-        // Move all children from nextSibling to prevSibling
-        while (nextSibling.firstChild) {
-          prevSibling.appendChild(nextSibling.firstChild)
-        }
-        
-        // Remove the paragraph and second container
-        current.remove()
-        nextSibling.remove()
-        console.log('mergeAdjacentContainers: removed paragraph and second container')
-        
-        // Position cursor in the merged container
-        const lastChild = prevSibling.lastElementChild
-        if (lastChild) {
-          this.setCursorAtStart(lastChild)
-        }
-      } else {
-        console.log('mergeAdjacentContainers: no merge needed')
-      }
+      // This method was designed to merge containers after operations that might create
+      // unnecessary adjacent containers, but for the exitContainer operation, we want
+      // to preserve the intentional split structure.
+      // 
+      // The exitContainer operation specifically creates: container + paragraph + container
+      // This structure should be preserved regardless of paragraph content.
+      console.log('mergeAdjacentContainers: called but disabled for exitContainer operations')
+      return // Disable container merging for exitContainer operations
     },
     
     findEmptyBlock(container) {
