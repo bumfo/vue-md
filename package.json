@@ -1,0 +1,29 @@
+{
+  "name": "vue-md-editor",
+  "version": "1.0.0",
+  "description": "Vue.js 2.0 markdown editor with contenteditable support",
+  "main": "src/main.js",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "serve": "vite preview"
+  },
+  "dependencies": {
+    "vue": "^2.7.14",
+    "turndown": "^7.1.2",
+    "markdown-it": "^13.0.2",
+    "github-markdown-css": "^5.2.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue2": "^2.2.0",
+    "vite": "^4.4.5"
+  },
+  "keywords": [
+    "vue",
+    "markdown",
+    "editor",
+    "contenteditable"
+  ],
+  "author": "",
+  "license": "MIT"
+}
