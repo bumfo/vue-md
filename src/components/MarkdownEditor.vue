@@ -24,17 +24,45 @@ export default {
   },
   data() {
     return {
-      htmlContent: '',
+      internalHtml: '',
       md: null,
-      turndownService: null,
-      isUpdatingFromMarkdown: false,
-      isUserEditing: false,
-      editingTimeout: null
+      turndownService: null
     }
   },
+  computed: {
+    htmlContent: {
+      get() {
+        return this.internalHtml
+      },
+      set(html) {
+        // Programmatic HTML update - update internal state and DOM
+        this.internalHtml = html
+        if (this.$refs.editor && this.$refs.editor.innerHTML !== html) {
+          this.$refs.editor.innerHTML = html
+        }
+      }
+    },
+    
+    markdownContent: {
+      get() {
+        // Always compute markdown from current HTML content
+        if (!this.turndownService) {
+          throw new Error('TurndownService not initialized')
+        }
+        return this.turndownService.turndown(this.internalHtml)
+      },
+      set(markdown) {
+        // Programmatic markdown update - convert to HTML and update DOM
+        if (!this.md) {
+          throw new Error('MarkdownIt not initialized')
+        }
+        this.htmlContent = this.md.render(markdown)
+      }
+    }
+  },
+  
   mounted() {
     this.initializeServices()
-    this.updateHtmlFromMarkdown()
   },
   methods: {
     initializeServices() {
@@ -60,38 +88,20 @@ export default {
         }
       })
     },
-
-    updateHtmlFromMarkdown() {
-      if (this.isUserEditing) {
-        return
-      }
-      this.isUpdatingFromMarkdown = true
-      this.htmlContent = this.md.render(this.value)
-      this.$nextTick(() => {
-        this.isUpdatingFromMarkdown = false
-      })
-    },
-
-    updateMarkdownFromHtml(html) {
-      if (!this.isUpdatingFromMarkdown) {
-        const markdown = this.turndownService.turndown(html)
-        this.$emit('input', markdown)
-      }
+    
+    
+    handleUserHtmlChange(html) {
+      // User action - update internal HTML and emit markdown changes
+      this.internalHtml = html
+      this.$emit('input', this.markdownContent)
     },
 
     handleInput(event) {
-      this.isUserEditing = true
-      const html = event.target.innerHTML
-      this.updateMarkdownFromHtml(html)
-      
-      this.$nextTick(() => {
-        this.resetUserEditing()
-      })
+      this.handleUserHtmlChange(event.target.innerHTML)
     },
 
     handlePaste(event) {
       event.preventDefault()
-      this.isUserEditing = true
 
       const clipboardData = event.clipboardData || window.clipboardData
       const plainText = clipboardData.getData('text/plain')
@@ -108,20 +118,16 @@ export default {
       document.execCommand('insertHTML', false, markdownHtml)
 
       this.$nextTick(() => {
-        this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-        this.resetUserEditing()
+        this.handleUserHtmlChange(this.$refs.editor.innerHTML)
       })
     },
 
     handleKeydown(event) {
-      this.isUserEditing = true
-
       if (event.key === 'Tab') {
         event.preventDefault()
         document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
         this.$nextTick(() => {
-          this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-          this.resetUserEditing()
+          this.handleUserHtmlChange(this.$refs.editor.innerHTML)
         })
         return
       }
@@ -202,42 +208,23 @@ export default {
             }
 
             this.$nextTick(() => {
-              this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-              this.resetUserEditing()
+              this.handleUserHtmlChange(this.$refs.editor.innerHTML)
             })
             return
           }
         }
       }
-      
-      // For any other key, reset editing state after a delay
-      this.$nextTick(() => {
-        this.resetUserEditing()
-      })
     },
 
-    resetUserEditing() {
-      clearTimeout(this.editingTimeout)
-      this.editingTimeout = setTimeout(() => {
-        this.isUserEditing = false
-      }, 500)
-    }
   },
 
   watch: {
     value: {
-      handler() {
-        if (!this.isUpdatingFromMarkdown && !this.isUserEditing) {
-          this.updateHtmlFromMarkdown()
-        }
+      handler(newValue) {
+        // External prop change - update internal state via computed setter
+        this.markdownContent = newValue
       },
-      immediate: false
-    }
-  },
-
-  beforeDestroy() {
-    if (this.editingTimeout) {
-      clearTimeout(this.editingTimeout)
+      immediate: true
     }
   }
 }
