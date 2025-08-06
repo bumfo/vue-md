@@ -547,47 +547,15 @@ export default {
       const newParagraph = document.createElement('p')
       newParagraph.innerHTML = content || '<br>'
       
-      // Special handling for list items - need to split the list
-      if (blockElement.tagName === 'LI' && (container.tagName === 'UL' || container.tagName === 'OL')) {
-        const remainingItems = []
-        
-        // Collect all items after this one
-        let nextItem = blockElement.nextElementSibling
-        while (nextItem) {
-          const temp = nextItem.nextElementSibling
-          remainingItems.push(nextItem)
-          nextItem = temp
-        }
-        
-        // Remove the current item
-        blockElement.remove()
-        
-        // Insert paragraph after the current list
-        container.parentNode.insertBefore(newParagraph, container.nextSibling)
-        
-        // If there are remaining items, create a new list after the paragraph
-        if (remainingItems.length > 0) {
-          const newList = document.createElement(container.tagName)
-          remainingItems.forEach(item => newList.appendChild(item))
-          container.parentNode.insertBefore(newList, newParagraph.nextSibling)
-        }
-        
-        // If original container is now empty, remove it
-        if (container.children.length === 0) {
-          container.remove()
-        }
-      } else {
-        // Standard container exit for blockquote > p, pre > code, etc.
-        // Insert AFTER the container (not before)
-        container.parentNode.insertBefore(newParagraph, container.nextSibling)
-        
-        // Remove the block from container
-        blockElement.remove()
-        
-        // If container is now empty, remove it
-        if (container.textContent.trim() === '') {
-          container.remove()
-        }
+      // Standard container exit - insert AFTER the container (not before)
+      container.parentNode.insertBefore(newParagraph, container.nextSibling)
+      
+      // Remove the block from container
+      blockElement.remove()
+      
+      // If container is now empty, remove it
+      if (container.textContent.trim() === '') {
+        container.remove()
       }
       
       // Check for container merging after the operation
@@ -608,12 +576,10 @@ export default {
       const previousContainer = previousElement.parentElement
       const currentContainer = blockElement.parentElement
       
-      // Check if both elements are in same type containers or both at root
+      // Only merge within the same container or both at root - never cross containers
       const canMerge = (
-        (previousContainer === currentContainer) || // Same container
-        (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) || // Both at root
-        (this.isContainerElement(previousContainer) && this.isContainerElement(currentContainer) && 
-         previousContainer.tagName === currentContainer.tagName) // Same container type
+        (previousContainer === currentContainer) || // Same exact container
+        (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) // Both at root
       )
       
       if (!canMerge) return false
