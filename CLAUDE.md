@@ -217,6 +217,7 @@ if (isInContainer) {
 1. **Exit container**: `blockquote(p1, p2) + backspace at p2 → blockquote(p1), p2`
 2. **Merge with previous**: `blockquote(p1), p2 + backspace at p2 → blockquote(p1 + p2_content)`
 3. **Auto-merge containers**: `blockquote(p1), p2(empty), blockquote(p3) + backspace at p2 → blockquote(p1, p3)`
+4. **Merge content with container**: `blockquote(p1), p2(non-empty), blockquote(p3) + backspace at p2 → blockquote(p1 + p2, p3)`
 
 ### Unified Enter Behavior
 
