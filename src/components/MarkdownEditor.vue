@@ -234,16 +234,30 @@ export default {
       const previousType = this.getBlockType(previousElement)
       
       if (previousType === 'paragraph' || previousType === 'heading') {
-        // Merge content into previous element, keeping previous element's style
-        const cursorPosition = previousElement.textContent.length
+        // Store current content and cursor position info
+        const currentContent = this.extractInlineContent(blockElement)
+        const cursorPositionText = previousElement.textContent.length
         
-        // Extract only the inline content, stripping block styling from spans
-        const cleanedContent = this.extractInlineContent(blockElement)
-        previousElement.innerHTML += cleanedContent
-        blockElement.remove()
+        // Use execCommand to merge - position cursor at end of previous element
+        const range = document.createRange()
+        const selection = window.getSelection()
         
-        // Position cursor at the merge point
-        this.setCursorPosition(previousElement, cursorPosition)
+        // Position at end of previous element
+        range.setStart(previousElement, previousElement.childNodes.length)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        
+        // Use execCommand to delete the current paragraph and merge content
+        document.execCommand('insertHTML', false, currentContent)
+        
+        // Remove the empty paragraph
+        if (blockElement.parentNode) {
+          blockElement.remove()
+        }
+        
+        // Position cursor at merge point
+        this.setCursorPosition(previousElement, cursorPositionText)
         return true
       }
       
@@ -457,25 +471,103 @@ export default {
     },
 
     insertCleanNewLine() {
-      // Insert a clean paragraph without inheriting inline styles
-      const p = document.createElement('p')
-      p.innerHTML = '<br>'
+      // Insert a clean paragraph without inheriting inline styles using execCommand
+      document.execCommand('insertHTML', false, '<p><br></p>')
+    },
+
+    handleEnter(range) {
+      const container = range.commonAncestorContainer
       
-      const selection = window.getSelection()
-      const range = selection.getRangeAt(0)
+      // Priority 1: Check if we're in a list item (highest priority)
+      let parentLi = null
+      if (container.nodeType === Node.TEXT_NODE) {
+        parentLi = container.parentElement.closest('li')
+      } else {
+        parentLi = container.closest && container.closest('li')
+      }
+
+      if (parentLi) {
+        return this.handleListItemEnter(parentLi)
+      }
+
+      // Priority 2: Check if we're in an empty styled block (including nested)
+      const emptyStyledBlock = this.findEmptyStyledBlock(container)
+      if (emptyStyledBlock) {
+        return this.handleEmptyBlockEnter(emptyStyledBlock)
+      }
+
+      // Priority 3: Check if we're at the end of an inline styled element
+      if (this.isAtEndOfInlineElement(range)) {
+        this.insertCleanNewLine()
+        return true
+      }
+
+      // Let default behavior handle normal cases
+      return false
+    },
+
+    findEmptyStyledBlock(container) {
+      // Start from the container and walk up to find the first block element
+      let currentBlock = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
       
-      // Find the current block element
-      let currentBlock = range.startContainer
-      if (currentBlock.nodeType === Node.TEXT_NODE) {
+      while (currentBlock && currentBlock !== this.$refs.editor) {
+        if (this.isBlockElement(currentBlock)) {
+          const blockType = this.getBlockType(currentBlock)
+          // Check if it's a styled block (not paragraph or listitem) and is empty
+          if (blockType !== 'paragraph' && blockType !== 'listitem' && currentBlock.textContent.trim() === '') {
+            return currentBlock
+          }
+          break
+        }
         currentBlock = currentBlock.parentElement
       }
-      while (currentBlock && !this.isBlockElement(currentBlock)) {
-        currentBlock = currentBlock.parentElement
-      }
       
-      if (currentBlock) {
-        currentBlock.parentNode.insertBefore(p, currentBlock.nextSibling)
-        this.setCursorAtStart(p)
+      return null
+    },
+
+    handleEmptyBlockEnter(blockElement) {
+      // Use execCommand to reset empty styled block to paragraph
+      document.execCommand('formatBlock', false, 'p')
+      return true
+    },
+
+    handleListItemEnter(parentLi) {
+      const listContainer = parentLi.parentElement
+      const isOrderedList = listContainer.tagName === 'OL'
+
+      if (parentLi.textContent.trim() === '') {
+        // Break out of the list using execCommand
+        const remainingItems = []
+        let nextSibling = parentLi.nextElementSibling
+
+        // Collect remaining items
+        while (nextSibling) {
+          const temp = nextSibling.nextElementSibling
+          remainingItems.push(nextSibling.cloneNode(true))
+          nextSibling.remove()
+          nextSibling = temp
+        }
+
+        // Remove empty list item
+        parentLi.remove()
+
+        // Create paragraph and remaining list using execCommand
+        let htmlToInsert = '<p><br></p>'
+        if (remainingItems.length > 0) {
+          const listTag = isOrderedList ? 'ol' : 'ul'
+          htmlToInsert += `<${listTag}>`
+          remainingItems.forEach(item => {
+            htmlToInsert += item.outerHTML
+          })
+          htmlToInsert += `</${listTag}>`
+        }
+
+        document.execCommand('insertHTML', false, htmlToInsert)
+        return true
+      } else {
+        // Create new list item using execCommand
+        document.execCommand('insertHTML', false, '<li></li>')
+        return true
       }
     },
 
@@ -530,106 +622,9 @@ export default {
         const selection = window.getSelection()
         if (selection.rangeCount > 0) {
           const range = selection.getRangeAt(0)
-          const container = range.commonAncestorContainer
-
-          // Check if we're in an empty styled block (non-p)
-          let currentBlock = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
-          while (currentBlock && currentBlock !== this.$refs.editor) {
-            if (this.isBlockElement(currentBlock)) {
-              const blockType = this.getBlockType(currentBlock)
-              // If it's an empty styled block (not paragraph), reset to paragraph
-              if (blockType !== 'paragraph' && blockType !== 'listitem' && currentBlock.textContent.trim() === '') {
-                event.preventDefault()
-                this.resetBlockToParagraphWithEnter(currentBlock)
-                this.$nextTick(() => {
-                  this.handleUserHtmlChange(this.$refs.editor.innerHTML)
-                })
-                return
-              }
-              break
-            }
-            currentBlock = currentBlock.parentElement
-          }
-
-          // Check if we're at the end of an inline styled element
-          if (this.isAtEndOfInlineElement(range)) {
+          const handled = this.handleEnter(range)
+          if (handled) {
             event.preventDefault()
-            this.insertCleanNewLine()
-            this.$nextTick(() => {
-              this.handleUserHtmlChange(this.$refs.editor.innerHTML)
-            })
-            return
-          }
-
-          let parentLi = null
-          if (container.nodeType === Node.TEXT_NODE) {
-            parentLi = container.parentElement.closest('li')
-          } else {
-            parentLi = container.closest && container.closest('li')
-          }
-
-          if (parentLi) {
-            event.preventDefault()
-
-            const listContainer = parentLi.parentElement
-            const isOrderedList = listContainer.tagName === 'OL'
-
-            if (parentLi.textContent.trim() === '') {
-              // Break out of the list
-              const remainingItems = []
-              let nextSibling = parentLi.nextElementSibling
-
-              // Collect all items after the current empty one
-              while (nextSibling) {
-                const temp = nextSibling.nextElementSibling
-                remainingItems.push(nextSibling.cloneNode(true))
-                nextSibling.remove()
-                nextSibling = temp
-              }
-
-              // Remove the empty list item
-              parentLi.remove()
-
-              // Create a paragraph break
-              let htmlToInsert = '<p><br></p>'
-
-              // If there are remaining items, create a new list
-              if (remainingItems.length > 0) {
-                const listTag = isOrderedList ? 'ol' : 'ul'
-                htmlToInsert += `<${listTag}>`
-                remainingItems.forEach(item => {
-                  htmlToInsert += item.outerHTML
-                })
-                htmlToInsert += `</${listTag}>`
-              }
-
-              // Insert after the current list
-              const tempDiv = document.createElement('div')
-              tempDiv.innerHTML = htmlToInsert
-
-              let insertPoint = listContainer.nextSibling
-              const parent = listContainer.parentNode
-
-              while (tempDiv.firstChild) {
-                parent.insertBefore(tempDiv.firstChild, insertPoint)
-              }
-
-              // Position cursor in the paragraph
-              const newP = listContainer.nextElementSibling
-              if (newP && newP.tagName === 'P') {
-                const newRange = document.createRange()
-                const sel = window.getSelection()
-                newRange.setStart(newP, 0)
-                newRange.collapse(true)
-                sel.removeAllRanges()
-                sel.addRange(newRange)
-              }
-
-            } else {
-              const newLi = '<li></li>'
-              document.execCommand('insertHTML', false, newLi)
-            }
-
             this.$nextTick(() => {
               this.handleUserHtmlChange(this.$refs.editor.innerHTML)
             })
