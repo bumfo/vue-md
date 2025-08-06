@@ -106,24 +106,35 @@ export default {
     },
 
     handleBackspace(event) {
+      console.log('handleBackspace called')
       const selection = window.getSelection()
-      if (!selection.rangeCount) return false
+      if (!selection.rangeCount) {
+        console.log('handleBackspace: no selection range')
+        return false
+      }
 
       const range = selection.getRangeAt(0)
 
       // If there's a range selection, let default behavior handle it
       if (!range.collapsed) {
+        console.log('handleBackspace: range not collapsed, letting browser handle')
         return false  // Let browser handle selection deletion
       }
 
       // Only handle single caret at block start
       const {startContainer, startOffset} = range
+      console.log('handleBackspace: startContainer:', startContainer, 'startOffset:', startOffset)
       const isAtBlockStart = this.isAtBlockStart(startContainer, startOffset)
+      console.log('handleBackspace: isAtBlockStart:', isAtBlockStart)
 
-      if (!isAtBlockStart.atStart) return false
+      if (!isAtBlockStart.atStart) {
+        console.log('handleBackspace: not at block start, returning false')
+        return false
+      }
 
       const blockElement = isAtBlockStart.blockElement
       const blockType = this.getBlockType(blockElement)
+      console.log('handleBackspace: calling handleBlockBackspace with element:', blockElement.tagName, 'type:', blockType)
 
       // Handle different block types according to markdown semantics
       return this.handleBlockBackspace(blockElement, blockType)
@@ -152,6 +163,11 @@ export default {
     },
 
     getTextBeforeCursor(blockElement, container, offset) {
+      // If container is an element node at offset 0, we're at the start
+      if (container.nodeType === Node.ELEMENT_NODE && offset === 0) {
+        return ''
+      }
+
       const walker = document.createTreeWalker(
           blockElement,
           NodeFilter.SHOW_TEXT,
@@ -627,7 +643,10 @@ export default {
       )
       
       console.log('mergeWithPrevious: canMerge:', canMerge)
-      if (!canMerge) return false
+      if (!canMerge) {
+        console.log('mergeWithPrevious: cannot merge, returning false')
+        return false
+      }
       
       if (previousType === 'paragraph' || previousType === 'heading') {
         console.log('mergeWithPrevious: merging with paragraph/heading')
@@ -684,9 +703,15 @@ export default {
             // Non-empty paragraph - merge content into the last block of the previous container
             console.log('mergeWithPrevious: merging content into previous container')
             const lastChild = previousElement.lastElementChild
+            console.log('mergeWithPrevious: lastChild:', lastChild ? lastChild.tagName : 'null')
+            console.log('mergeWithPrevious: lastChild innerHTML:', lastChild ? lastChild.innerHTML : 'null')
+            console.log('mergeWithPrevious: lastChild is block?', lastChild ? this.isBlockElement(lastChild) : 'null')
+            
             if (lastChild && this.isBlockElement(lastChild)) {
               const cursorPosition = lastChild.textContent.length
               const currentContent = this.extractInlineContent(blockElement)
+              console.log('mergeWithPrevious: currentContent to merge:', currentContent)
+              console.log('mergeWithPrevious: cursor position before merge:', cursorPosition)
               
               // Position cursor at end of last child in container
               const range = document.createRange()
@@ -695,16 +720,28 @@ export default {
               range.collapse(true)
               selection.removeAllRanges()
               selection.addRange(range)
+              console.log('mergeWithPrevious: positioned cursor at end of lastChild')
               
               // Use execCommand to insert content
               document.execCommand('insertHTML', false, currentContent)
+              console.log('mergeWithPrevious: inserted content via execCommand')
               
               // Remove current block
               blockElement.remove()
+              console.log('mergeWithPrevious: removed current block')
               
               // Position cursor
               this.setCursorPosition(lastChild, cursorPosition)
+              console.log('mergeWithPrevious: repositioned cursor')
+              console.log('mergeWithPrevious: FINAL lastChild innerHTML:', lastChild.innerHTML)
+              console.log('mergeWithPrevious: FINAL container HTML:', previousElement.innerHTML)
+              
+              // Sync DOM changes back to Vue state
+              this.handleUserHtmlChange(this.$refs.editor.innerHTML)
+              console.log('mergeWithPrevious: synced DOM to Vue state')
               return true
+            } else {
+              console.log('mergeWithPrevious: no valid lastChild to merge into')
             }
           } else {
             // Empty paragraph - try container merging
