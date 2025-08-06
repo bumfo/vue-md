@@ -198,6 +198,14 @@ The goal is seamless markdown editing where the visual interface enhances rather
 ### Core Principle: Markdown Flat Structure
 Markdown treats all blocks as a flat sequence. Containers (ul/ol, blockquote, pre) are styling wrappers, not semantic blocks. All blocks follow unified rules regardless of their container context.
 
+#### Block Semantic Model
+**Containers are transparent** - only leaf HTML blocks are considered markdown blocks:
+
+- **Container Elements**: UL, OL, BLOCKQUOTE, PRE (invisible to block traversal logic)
+- **Markdown Blocks**: P, LI, H1-H6 (actual content blocks that participate in semantic operations)
+
+This principle ensures consistent behavior across all block operations. When searching for previous/next blocks, the algorithm looks through container boundaries to find actual content blocks.
+
 ### Unified Backspace Behavior
 
 #### Context-Based Actions
