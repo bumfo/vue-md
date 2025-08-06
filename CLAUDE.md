@@ -9,7 +9,7 @@ Vue.js 2.0 markdown editor with contenteditable support. This project provides a
 ## Development Commands
 
 - `npm install` - Install dependencies
-- `npm run dev` - Start development server with Vite
+- `npm run dev` - Start development server with Vite (user should run this themselves for testing)
 - `npm run build` - Build for production
 - `npm run serve` - Preview production build
 
