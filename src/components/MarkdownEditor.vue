@@ -587,9 +587,9 @@ export default {
         console.log('exitContainer: removed empty container')
       }
       
-      console.log('exitContainer: calling mergeAdjacentContainers')
-      // Check for container merging after the operation
-      this.mergeAdjacentContainers(newParagraph)
+      // Don't call mergeAdjacentContainers for exitContainer operations
+      // The exitContainer operation intentionally creates split structure that should be preserved
+      console.log('exitContainer: skipping mergeAdjacentContainers - preserving split structure')
       
       // Position cursor
       this.setCursorAtStart(newParagraph)
@@ -710,14 +710,54 @@ export default {
     },
     
     mergeAdjacentContainers(referenceElement) {
-      // This method was designed to merge containers after operations that might create
-      // unnecessary adjacent containers, but for the exitContainer operation, we want
-      // to preserve the intentional split structure.
-      // 
-      // The exitContainer operation specifically creates: container + paragraph + container
-      // This structure should be preserved regardless of paragraph content.
-      console.log('mergeAdjacentContainers: called but disabled for exitContainer operations')
-      return // Disable container merging for exitContainer operations
+      // Only merge containers when we have an empty paragraph at root level between same-type containers
+      // This handles the case: blockquote(p1), p2(empty), blockquote(p3) → blockquote(p1, p3)
+      const current = referenceElement
+      console.log('mergeAdjacentContainers: current element:', current.tagName, 'innerHTML:', current.innerHTML)
+      console.log('mergeAdjacentContainers: current parent:', current.parentElement.tagName)
+      
+      // Only consider root-level paragraphs
+      if (current.tagName !== 'P' || this.isContainerElement(current.parentElement)) {
+        console.log('mergeAdjacentContainers: not a root paragraph, returning')
+        return
+      }
+      
+      // Only merge if paragraph is empty (no meaningful content)
+      if (current.textContent.trim() !== '' && current.innerHTML !== '<br>') {
+        console.log('mergeAdjacentContainers: paragraph has content, preserving split structure')
+        return
+      }
+      
+      const prevSibling = current.previousElementSibling
+      const nextSibling = current.nextElementSibling
+      console.log('mergeAdjacentContainers: prevSibling:', prevSibling ? prevSibling.tagName : 'null')
+      console.log('mergeAdjacentContainers: nextSibling:', nextSibling ? nextSibling.tagName : 'null')
+      
+      // Check if we have: same-container + empty-paragraph + same-container
+      if (prevSibling && nextSibling &&
+          this.isContainerElement(prevSibling) && 
+          this.isContainerElement(nextSibling) &&
+          prevSibling.tagName === nextSibling.tagName) {
+        
+        console.log('mergeAdjacentContainers: MERGING containers with empty paragraph!')
+        // Move all children from nextSibling to prevSibling
+        while (nextSibling.firstChild) {
+          prevSibling.appendChild(nextSibling.firstChild)
+        }
+        
+        // Remove the empty paragraph and second container
+        current.remove()
+        nextSibling.remove()
+        console.log('mergeAdjacentContainers: removed empty paragraph and second container')
+        
+        // Position cursor in the merged container at the boundary
+        const firstChildOfMerged = prevSibling.lastElementChild
+        if (firstChildOfMerged) {
+          this.setCursorAtStart(firstChildOfMerged)
+        }
+      } else {
+        console.log('mergeAdjacentContainers: no merge needed')
+      }
     },
     
     findEmptyBlock(container) {
