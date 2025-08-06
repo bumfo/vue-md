@@ -191,7 +191,7 @@ export default {
     },
 
     isBlockElement(element) {
-      const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'BLOCKQUOTE', 'PRE', 'LI']
+      const blockTags = ['P', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI']
       return blockTags.includes(element.tagName)
     },
 
