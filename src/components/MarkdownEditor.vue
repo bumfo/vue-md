@@ -743,12 +743,18 @@ export default {
                   this.isContainerElement(nextSibling) && 
                   nextSibling.tagName === previousElement.tagName) {
                 console.log('mergeWithPrevious: merging next container into current')
+                // Get the first child that will be moved (for cursor positioning)
+                const firstChildToMove = nextSibling.firstChild
                 // Move all children from next container to current container
                 while (nextSibling.firstChild) {
                   previousElement.appendChild(nextSibling.firstChild)
                 }
                 nextSibling.remove()
                 console.log('mergeWithPrevious: removed next container after merge')
+                
+                // Position cursor at the merge boundary (end of the content that was already there)
+                this.setCursorPosition(lastChild, cursorPosition)
+                console.log('mergeWithPrevious: positioned cursor at merge boundary')
               }
 
               // Sync DOM changes back to Vue state
@@ -857,6 +863,10 @@ export default {
           prevSibling.tagName === nextSibling.tagName) {
         
         console.log('mergeAdjacentContainers: MERGING containers with empty paragraph!')
+        // Get the original last child of the first container before merging
+        const originalLastChildOfFirst = prevSibling.lastElementChild
+        console.log('mergeAdjacentContainers: originalLastChildOfFirst:', originalLastChildOfFirst ? originalLastChildOfFirst.tagName : 'null')
+        
         // Move all children from nextSibling to prevSibling
         while (nextSibling.firstChild) {
           prevSibling.appendChild(nextSibling.firstChild)
@@ -867,10 +877,11 @@ export default {
         nextSibling.remove()
         console.log('mergeAdjacentContainers: removed empty paragraph and second container')
         
-        // Position cursor in the merged container at the boundary
-        const firstChildOfMerged = prevSibling.lastElementChild
-        if (firstChildOfMerged) {
-          this.setCursorAtStart(firstChildOfMerged)
+        // Position cursor at the end of the original last block in the first container (merge boundary)
+        if (originalLastChildOfFirst && this.isBlockElement(originalLastChildOfFirst)) {
+          // Position at end of the last block that was originally in the first container
+          this.setCursorPosition(originalLastChildOfFirst, originalLastChildOfFirst.textContent.length)
+          console.log('mergeAdjacentContainers: positioned cursor at end of original last block in first container')
         }
       } else {
         console.log('mergeAdjacentContainers: no merge needed')
