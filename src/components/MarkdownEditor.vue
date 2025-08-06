@@ -1,12 +1,12 @@
 <template>
   <div
-    ref="editor"
-    class="markdown-editor"
-    contenteditable="true"
-    @input="handleInput"
-    @paste="handlePaste"
-    @keydown="handleKeydown"
-    v-html="htmlContent"
+      ref="editor"
+      class="markdown-editor"
+      contenteditable="true"
+      @input="handleInput"
+      @paste="handlePaste"
+      @keydown="handleKeydown"
+      v-html="htmlContent"
   ></div>
 </template>
 
@@ -44,7 +44,7 @@ export default {
         typographer: true,
         breaks: true
       })
-      
+
       this.turndownService = new TurndownService({
         headingStyle: 'atx',
         hr: '---',
@@ -52,7 +52,7 @@ export default {
         codeBlockStyle: 'fenced',
         fence: '```'
       })
-      
+
       this.turndownService.addRule('strikethrough', {
         filter: ['del', 's', 'strike'],
         replacement: function (content) {
@@ -60,7 +60,7 @@ export default {
         }
       })
     },
-    
+
     updateHtmlFromMarkdown() {
       if (this.isUserEditing) {
         return
@@ -71,56 +71,56 @@ export default {
         this.isUpdatingFromMarkdown = false
       })
     },
-    
+
     updateMarkdownFromHtml(html) {
       if (!this.isUpdatingFromMarkdown) {
         const markdown = this.turndownService.turndown(html)
         this.$emit('input', markdown)
       }
     },
-    
+
     handleInput(event) {
       this.isUserEditing = true
       const html = event.target.innerHTML
       this.updateMarkdownFromHtml(html)
-      
+
       clearTimeout(this.editingTimeout)
       this.editingTimeout = setTimeout(() => {
         this.isUserEditing = false
       }, 500)
     },
-    
+
     handlePaste(event) {
       event.preventDefault()
       this.isUserEditing = true
-      
+
       const clipboardData = event.clipboardData || window.clipboardData
       const plainText = clipboardData.getData('text/plain')
       const htmlText = clipboardData.getData('text/html')
-      
+
       let contentToInsert
       if (htmlText) {
         contentToInsert = this.turndownService.turndown(htmlText)
       } else {
         contentToInsert = plainText
       }
-      
+
       const markdownHtml = this.md.render(contentToInsert)
       document.execCommand('insertHTML', false, markdownHtml)
-      
+
       this.$nextTick(() => {
         this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-        
+
         clearTimeout(this.editingTimeout)
         this.editingTimeout = setTimeout(() => {
           this.isUserEditing = false
         }, 500)
       })
     },
-    
+
     handleKeydown(event) {
       this.isUserEditing = true
-      
+
       if (event.key === 'Tab') {
         event.preventDefault()
         document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
@@ -129,31 +129,31 @@ export default {
           this.resetEditingTimeout()
         })
       }
-      
+
       if (event.key === 'Enter') {
         const selection = window.getSelection()
         if (selection.rangeCount > 0) {
           const range = selection.getRangeAt(0)
           const container = range.commonAncestorContainer
-          
+
           let parentLi = null
           if (container.nodeType === Node.TEXT_NODE) {
             parentLi = container.parentElement.closest('li')
           } else {
             parentLi = container.closest && container.closest('li')
           }
-          
+
           if (parentLi) {
             event.preventDefault()
-            
+
             const listContainer = parentLi.parentElement
             const isOrderedList = listContainer.tagName === 'OL'
-            
+
             if (parentLi.textContent.trim() === '') {
               // Break out of the list
               const remainingItems = []
               let nextSibling = parentLi.nextElementSibling
-              
+
               // Collect all items after the current empty one
               while (nextSibling) {
                 const temp = nextSibling.nextElementSibling
@@ -161,13 +161,13 @@ export default {
                 nextSibling.remove()
                 nextSibling = temp
               }
-              
+
               // Remove the empty list item
               parentLi.remove()
-              
+
               // Create a paragraph break
               let htmlToInsert = '<p><br></p>'
-              
+
               // If there are remaining items, create a new list
               if (remainingItems.length > 0) {
                 const listTag = isOrderedList ? 'ol' : 'ul'
@@ -177,18 +177,18 @@ export default {
                 })
                 htmlToInsert += `</${listTag}>`
               }
-              
+
               // Insert after the current list
               const tempDiv = document.createElement('div')
               tempDiv.innerHTML = htmlToInsert
-              
+
               let insertPoint = listContainer.nextSibling
               const parent = listContainer.parentNode
-              
+
               while (tempDiv.firstChild) {
                 parent.insertBefore(tempDiv.firstChild, insertPoint)
               }
-              
+
               // Position cursor in the paragraph
               const newP = listContainer.nextElementSibling
               if (newP && newP.tagName === 'P') {
@@ -199,12 +199,12 @@ export default {
                 sel.removeAllRanges()
                 sel.addRange(newRange)
               }
-              
+
             } else {
               const newLi = '<li></li>'
               document.execCommand('insertHTML', false, newLi)
             }
-            
+
             this.$nextTick(() => {
               this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
               this.resetEditingTimeout()
@@ -213,7 +213,7 @@ export default {
         }
       }
     },
-    
+
     resetEditingTimeout() {
       clearTimeout(this.editingTimeout)
       this.editingTimeout = setTimeout(() => {
@@ -221,7 +221,7 @@ export default {
       }, 500)
     }
   },
-  
+
   watch: {
     value: {
       handler() {
@@ -232,7 +232,7 @@ export default {
       immediate: false
     }
   },
-  
+
   beforeDestroy() {
     if (this.editingTimeout) {
       clearTimeout(this.editingTimeout)
