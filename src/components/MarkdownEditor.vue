@@ -672,15 +672,46 @@ export default {
         return true
       } else {
         // Previous element is a container (blockquote, list, etc.)
-        // For root-level paragraphs, check if we should merge containers
-        console.log('mergeWithPrevious: previous is container, checking for container merge')
+        console.log('mergeWithPrevious: previous is container, checking merge type')
         console.log('mergeWithPrevious: blockElement is root paragraph?', blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement))
         
         if (blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement)) {
-          // This is a root-level paragraph, try container merging
-          console.log('mergeWithPrevious: calling mergeAdjacentContainers')
-          this.mergeAdjacentContainers(blockElement)
-          return true
+          // This is a root-level paragraph
+          const hasContent = blockElement.textContent.trim() !== '' && blockElement.innerHTML !== '<br>'
+          console.log('mergeWithPrevious: paragraph has content?', hasContent)
+          
+          if (hasContent) {
+            // Non-empty paragraph - merge content into the last block of the previous container
+            console.log('mergeWithPrevious: merging content into previous container')
+            const lastChild = previousElement.lastElementChild
+            if (lastChild && this.isBlockElement(lastChild)) {
+              const cursorPosition = lastChild.textContent.length
+              const currentContent = this.extractInlineContent(blockElement)
+              
+              // Position cursor at end of last child in container
+              const range = document.createRange()
+              const selection = window.getSelection()
+              range.setStart(lastChild, lastChild.childNodes.length)
+              range.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              
+              // Use execCommand to insert content
+              document.execCommand('insertHTML', false, currentContent)
+              
+              // Remove current block
+              blockElement.remove()
+              
+              // Position cursor
+              this.setCursorPosition(lastChild, cursorPosition)
+              return true
+            }
+          } else {
+            // Empty paragraph - try container merging
+            console.log('mergeWithPrevious: empty paragraph, calling mergeAdjacentContainers')
+            this.mergeAdjacentContainers(blockElement)
+            return true
+          }
         }
       }
       
