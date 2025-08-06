@@ -543,27 +543,57 @@ export default {
     // === UNIFIED CONTAINER/BLOCK OPERATIONS ===
     
     exitContainer(blockElement, container) {
-      // Move block out of container - handles li, blockquote > p, pre > code uniformly
       const content = this.extractInlineContent(blockElement)
       const newParagraph = document.createElement('p')
       newParagraph.innerHTML = content || '<br>'
       
-      // Insert before the container
-      container.parentNode.insertBefore(newParagraph, container)
-      
-      // Remove the block from container
-      blockElement.remove()
-      
-      // If container is now empty, remove it
-      if (container.textContent.trim() === '') {
-        container.remove()
+      // Special handling for list items - need to split the list
+      if (blockElement.tagName === 'LI' && (container.tagName === 'UL' || container.tagName === 'OL')) {
+        const remainingItems = []
+        
+        // Collect all items after this one
+        let nextItem = blockElement.nextElementSibling
+        while (nextItem) {
+          const temp = nextItem.nextElementSibling
+          remainingItems.push(nextItem)
+          nextItem = temp
+        }
+        
+        // Remove the current item
+        blockElement.remove()
+        
+        // Insert paragraph after the current list
+        container.parentNode.insertBefore(newParagraph, container.nextSibling)
+        
+        // If there are remaining items, create a new list after the paragraph
+        if (remainingItems.length > 0) {
+          const newList = document.createElement(container.tagName)
+          remainingItems.forEach(item => newList.appendChild(item))
+          container.parentNode.insertBefore(newList, newParagraph.nextSibling)
+        }
+        
+        // If original container is now empty, remove it
+        if (container.children.length === 0) {
+          container.remove()
+        }
+      } else {
+        // Standard container exit for blockquote > p, pre > code, etc.
+        // Insert AFTER the container (not before)
+        container.parentNode.insertBefore(newParagraph, container.nextSibling)
+        
+        // Remove the block from container
+        blockElement.remove()
+        
+        // If container is now empty, remove it
+        if (container.textContent.trim() === '') {
+          container.remove()
+        }
       }
       
       // Check for container merging after the operation
       this.mergeAdjacentContainers(newParagraph)
       
-      // Position cursor - but DON'T auto-merge when exiting container
-      // User should manually backspace again if they want to merge with previous root element
+      // Position cursor
       this.setCursorAtStart(newParagraph)
       
       return true
@@ -612,8 +642,18 @@ export default {
           blockContainer.remove()
         }
         
-        // Check for container merging
-        this.mergeAdjacentContainers(previousElement)
+        // Check for container merging - need to find the right context
+        // If previousElement is in a container, check if we created a merge opportunity
+        const prevContainer = previousElement.parentElement
+        if (this.isContainerElement(prevContainer)) {
+          // Check siblings of the container for merge opportunities
+          const nextSibling = prevContainer.nextElementSibling
+          if (nextSibling && nextSibling.tagName === 'P') {
+            this.mergeAdjacentContainers(nextSibling)
+          }
+        } else {
+          this.mergeAdjacentContainers(previousElement)
+        }
         
         // Position cursor
         this.setCursorPosition(previousElement, cursorPosition)
