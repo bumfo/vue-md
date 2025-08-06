@@ -45,7 +45,25 @@ export default {
   },
   data() {
     return {
-      markdownContent: '# Welcome to Vue Markdown Editor\n\nStart typing to see the magic happen!\n> abc\n>\n> def\n\n- Item 1\n- Item 2\n- Item 3\n\n**Bold text** and *italic text*\n\n```javascript\nconsole.log("Hello World!");\n```',
+      markdownContent: `# Welcome to Vue Markdown Editor
+
+Start typing to see the magic happen!
+
+- Item 1
+- Item 2
+- Item 3
+
+> abc
+>
+> def
+>
+> ghi
+
+**Bold text** and *italic text*
+
+\`\`\`javascript
+console.log("Hello World!");
+\`\`\``,
       viewMode: 'editor',
       md: null
     }
