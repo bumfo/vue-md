@@ -103,6 +103,44 @@ This pattern applies to any component where:
 
 The key insight: **The source of a change determines its update path, not the data itself.**
 
+## DOM Mutation with Native History
+
+### ExecCommand Requirement
+All DOM mutations that should be undoable by the user MUST use `document.execCommand()` instead of direct DOM manipulation. This ensures proper integration with the browser's native undo/redo history stack.
+
+**Critical Rule**: Any operation that changes the DOM in response to user input must use execCommand to maintain native history support.
+
+#### Required ExecCommand Operations
+- **Content Insertion**: `document.execCommand('insertHTML', false, htmlContent)`
+- **Block Formatting**: `document.execCommand('formatBlock', false, 'p')`  
+- **Text Deletion**: Let browser handle via execCommand when possible
+
+#### Examples
+```javascript
+// ✅ Correct: Uses execCommand for user-initiated changes
+handleEnter() {
+  document.execCommand('insertHTML', false, '<p><br></p>')
+}
+
+// ❌ Wrong: Direct DOM manipulation breaks undo history
+handleEnter() {
+  const p = document.createElement('p')
+  p.innerHTML = '<br>'
+  container.appendChild(p)
+}
+```
+
+#### When Direct DOM is Acceptable
+- **Cursor positioning**: Selection/Range API operations
+- **Programmatic updates**: External prop changes (not user actions)
+- **Initialization**: Setting up initial DOM state
+
+### Benefits of ExecCommand
+- **Native Undo/Redo**: Ctrl+Z works correctly
+- **Consistent History**: User actions are properly tracked
+- **Browser Compatibility**: Leverages built-in contenteditable behavior
+- **Accessible**: Screen readers and assistive technologies understand the changes
+
 ## Markdown Editing UX Philosophy
 
 ### The Goal: Text-Like Behavior with Visual Styling
