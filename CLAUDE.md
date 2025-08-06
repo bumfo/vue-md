@@ -192,3 +192,54 @@ This philosophy extends to all key interactions:
 - **Undo/Redo**: Maintain semantic operation boundaries
 
 The goal is seamless markdown editing where the visual interface enhances rather than interferes with the underlying markdown logic.
+
+## Unified Block Semantic Model
+
+### Core Principle: Markdown Flat Structure
+Markdown treats all blocks as a flat sequence. Containers (ul/ol, blockquote, pre) are styling wrappers, not semantic blocks. All blocks follow unified rules regardless of their container context.
+
+### Unified Backspace Behavior
+
+#### Context-Based Actions
+```javascript
+if (isInContainer) {
+  return exitContainer(block, container)  // Move block out of container
+} else {
+  if (blockType === 'paragraph') {
+    return mergeWithPrevious(block)       // Merge with previous block
+  } else {
+    return resetBlockToParagraph(block)   // Convert styled block to paragraph
+  }
+}
+```
+
+#### Complete Backspace Logic
+1. **Exit container**: `blockquote(p1, p2) + backspace at p2 → blockquote(p1), p2`
+2. **Merge with previous**: `blockquote(p1), p2 + backspace at p2 → blockquote(p1 + p2_content)`
+3. **Auto-merge containers**: `blockquote(p1), p2(empty), blockquote(p3) + backspace at p2 → blockquote(p1, p3)`
+
+### Unified Enter Behavior
+
+#### Priority-Based Handling
+1. **Empty block in container**: Split container or exit
+2. **Content splitting**: Let browser handle within blocks
+3. **Container operations**: Automatic split/merge as needed
+
+#### Complete Enter Logic
+1. **Split content**: `blockquote(p1(abc,def)) + enter before def → blockquote(p1(abc), p2(def))`
+2. **Exit at end**: `blockquote(p1, p2(empty)) + enter at p2 → blockquote(p1), p2`
+3. **Split container**: `blockquote(p1, p2(empty), p3) + enter at p2 → blockquote(p1), p2, blockquote(p3)`
+
+### Container Operations
+
+#### Automatic Container Management
+- **Split**: When paragraph created in middle of container
+- **Merge**: When paragraph between same-type containers is removed  
+- **Exit**: When moving block out of container
+- **Cleanup**: Empty containers are automatically removed
+
+#### Benefits
+- **Unified Logic**: Same rules for all blocks (li, p, h1-h6)
+- **Predictable**: Container context determines behavior, not block type
+- **Semantic**: Respects markdown flat structure
+- **Native Integration**: Uses execCommand for undo/redo support
