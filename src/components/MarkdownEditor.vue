@@ -179,6 +179,11 @@ export default {
       return blockTags.includes(element.tagName)
     },
     
+    isContainerElement(element) {
+      const containerTags = ['BLOCKQUOTE', 'OL', 'UL', 'PRE']
+      return containerTags.includes(element.tagName)
+    },
+    
     getBlockType(element) {
       const tag = element.tagName
       if (['H1', 'H2', 'H3', 'H4', 'H5', 'H6'].includes(tag)) return 'heading'
@@ -228,33 +233,88 @@ export default {
     },
     
     mergeParagraphWithPrevious(blockElement) {
+      // Check if this block is inside a container
+      const blockContainer = blockElement.parentElement
+      const isInContainer = this.isContainerElement(blockContainer)
+      
+      if (isInContainer) {
+        // If the block is the first/only child in a container, move it out of the container
+        if (blockContainer.children.length === 1 || blockElement === blockContainer.firstElementChild) {
+          // Move the block outside the container
+          const newParagraph = document.createElement('p')
+          newParagraph.innerHTML = blockElement.innerHTML || '<br>'
+          
+          // Insert before the container
+          blockContainer.parentNode.insertBefore(newParagraph, blockContainer)
+          
+          // Remove the block from container
+          blockElement.remove()
+          
+          // If container is now empty, remove it
+          if (blockContainer.textContent.trim() === '') {
+            blockContainer.remove()
+          }
+          
+          // Now try to merge with the previous element again
+          return this.mergeParagraphWithPrevious(newParagraph)
+        } else {
+          // Merge with previous sibling within the container
+          const prevSibling = blockElement.previousElementSibling
+          if (prevSibling && this.isBlockElement(prevSibling)) {
+            const cursorPosition = prevSibling.textContent.length
+            const currentContent = this.extractInlineContent(blockElement)
+            
+            // Position cursor at end of previous element
+            const range = document.createRange()
+            const selection = window.getSelection()
+            range.setStart(prevSibling, prevSibling.childNodes.length)
+            range.collapse(true)
+            selection.removeAllRanges()
+            selection.addRange(range)
+            
+            // Use execCommand to insert the content
+            document.execCommand('insertHTML', false, currentContent)
+            
+            // Remove the now-empty block
+            blockElement.remove()
+            
+            // Position cursor at merge point
+            this.setCursorPosition(prevSibling, cursorPosition)
+            return true
+          }
+        }
+        
+        return false
+      }
+      
+      // Standard merging for blocks not in containers
       const previousElement = this.getPreviousBlockElement(blockElement)
       if (!previousElement) return false
       
       const previousType = this.getBlockType(previousElement)
       
       if (previousType === 'paragraph' || previousType === 'heading') {
-        // Store current content and cursor position info
-        const currentContent = this.extractInlineContent(blockElement)
+        // Store cursor position and extract clean content
         const cursorPositionText = previousElement.textContent.length
+        const currentContent = this.extractInlineContent(blockElement)
         
-        // Use execCommand to merge - position cursor at end of previous element
+        // Position cursor at end of previous element
         const range = document.createRange()
         const selection = window.getSelection()
-        
-        // Position at end of previous element
         range.setStart(previousElement, previousElement.childNodes.length)
         range.collapse(true)
         selection.removeAllRanges()
         selection.addRange(range)
         
-        // Use execCommand to delete the current paragraph and merge content
+        // Use execCommand to insert the cleaned content
         document.execCommand('insertHTML', false, currentContent)
         
-        // Remove the empty paragraph
-        if (blockElement.parentNode) {
-          blockElement.remove()
-        }
+        // Use execCommand to delete the now-empty block
+        const rangeToDelete = document.createRange()
+        rangeToDelete.selectNode(blockElement)
+        selection.removeAllRanges()
+        selection.addRange(rangeToDelete)
+        document.execCommand('delete')
         
         // Position cursor at merge point
         this.setCursorPosition(previousElement, cursorPositionText)
@@ -507,28 +567,80 @@ export default {
     },
 
     findEmptyStyledBlock(container) {
-      // Start from the container and walk up to find the first block element
-      let currentBlock = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+      // In markdown, blocks are flat - find the actual block element that needs conversion
+      let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+      let foundBlock = null
+      let containerElement = null
       
-      while (currentBlock && currentBlock !== this.$refs.editor) {
-        if (this.isBlockElement(currentBlock)) {
-          const blockType = this.getBlockType(currentBlock)
-          // Check if it's a styled block (not paragraph or listitem) and is empty
-          if (blockType !== 'paragraph' && blockType !== 'listitem' && currentBlock.textContent.trim() === '') {
-            return currentBlock
+      // Walk up to find the innermost block element and its container
+      while (currentElement && currentElement !== this.$refs.editor) {
+        if (this.isBlockElement(currentElement)) {
+          const blockType = this.getBlockType(currentElement)
+          
+          // The innermost block element is the actual markdown block
+          if (!foundBlock) {
+            foundBlock = currentElement
           }
-          break
+          
+          // Check if this block is inside a container (blockquote, ol, ul, pre)
+          const parent = currentElement.parentElement
+          if (parent && this.isContainerElement(parent)) {
+            containerElement = parent
+          }
+          
+          break // We found the innermost block, no need to continue
         }
-        currentBlock = currentBlock.parentElement
+        currentElement = currentElement.parentElement
+      }
+      
+      // Only return if the block is empty and styled (not a plain paragraph in root)
+      if (foundBlock && foundBlock.textContent.trim() === '') {
+        const blockType = this.getBlockType(foundBlock)
+        const hasContainer = containerElement !== null
+        
+        // If it's a styled block OR a paragraph inside a container, it needs conversion
+        if (blockType !== 'paragraph' || hasContainer) {
+          return { block: foundBlock, container: containerElement }
+        }
       }
       
       return null
     },
 
-    handleEmptyBlockEnter(blockElement) {
-      // Use execCommand to reset empty styled block to paragraph
-      document.execCommand('formatBlock', false, 'p')
-      return true
+    handleEmptyBlockEnter(blockInfo) {
+      const { block, container } = blockInfo
+      
+      if (container) {
+        // Block is inside a container - move it outside the container
+        const newParagraph = document.createElement('p')
+        newParagraph.innerHTML = '<br>'
+        
+        // Insert the new paragraph after the container
+        container.parentNode.insertBefore(newParagraph, container.nextSibling)
+        
+        // Remove the block from the container
+        block.remove()
+        
+        // If container is now empty, remove it too
+        if (container.textContent.trim() === '') {
+          container.remove()
+        }
+        
+        // Position cursor in the new paragraph
+        this.setCursorAtStart(newParagraph)
+        return true
+      } else {
+        // Block is not in a container - convert to paragraph using execCommand
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.selectNode(block)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        
+        // Use execCommand to replace with paragraph
+        document.execCommand('formatBlock', false, 'p')
+        return true
+      }
     },
 
     handleListItemEnter(parentLi) {
