@@ -660,8 +660,11 @@ export default {
         return false
       }
       
-      if (previousType === 'paragraph' || previousType === 'heading') {
-        console.log('mergeWithPrevious: merging with paragraph/heading')
+      // Check if this is cross-container merging (root element into container)
+      const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
+      
+      if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
+        console.log('mergeWithPrevious: merging with paragraph/heading (same level)')
         const cursorPosition = previousElement.textContent.length
         const currentContent = this.extractInlineContent(blockElement)
         
