@@ -600,12 +600,25 @@ export default {
     
     mergeWithPrevious(blockElement) {
       // Unified merge logic for any block with its previous element
+      console.log('mergeWithPrevious: blockElement:', blockElement.tagName, 'innerHTML:', blockElement.innerHTML)
+      console.log('mergeWithPrevious: blockElement parent:', blockElement.parentElement.tagName)
+      
       const previousElement = this.getPreviousBlockElement(blockElement)
-      if (!previousElement) return false
+      if (!previousElement) {
+        console.log('mergeWithPrevious: no previous element found')
+        return false
+      }
+      
+      console.log('mergeWithPrevious: previousElement:', previousElement.tagName, 'innerHTML:', previousElement.innerHTML)
+      console.log('mergeWithPrevious: previousElement parent:', previousElement.parentElement.tagName)
       
       const previousType = this.getBlockType(previousElement)
       const previousContainer = previousElement.parentElement
       const currentContainer = blockElement.parentElement
+      
+      console.log('mergeWithPrevious: previousType:', previousType)
+      console.log('mergeWithPrevious: previousContainer is container?', this.isContainerElement(previousContainer))
+      console.log('mergeWithPrevious: currentContainer is container?', this.isContainerElement(currentContainer))
       
       // Only merge within the same container or both at root - never cross containers
       const canMerge = (
@@ -613,9 +626,11 @@ export default {
         (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) // Both at root
       )
       
+      console.log('mergeWithPrevious: canMerge:', canMerge)
       if (!canMerge) return false
       
       if (previousType === 'paragraph' || previousType === 'heading') {
+        console.log('mergeWithPrevious: merging with paragraph/heading')
         const cursorPosition = previousElement.textContent.length
         const currentContent = this.extractInlineContent(blockElement)
         
@@ -655,6 +670,18 @@ export default {
         // Position cursor
         this.setCursorPosition(previousElement, cursorPosition)
         return true
+      } else {
+        // Previous element is a container (blockquote, list, etc.)
+        // For root-level paragraphs, check if we should merge containers
+        console.log('mergeWithPrevious: previous is container, checking for container merge')
+        console.log('mergeWithPrevious: blockElement is root paragraph?', blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement))
+        
+        if (blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement)) {
+          // This is a root-level paragraph, try container merging
+          console.log('mergeWithPrevious: calling mergeAdjacentContainers')
+          this.mergeAdjacentContainers(blockElement)
+          return true
+        }
       }
       
       return false
