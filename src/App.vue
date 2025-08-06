@@ -176,9 +176,58 @@ export default {
             const isOrderedList = listContainer.tagName === 'OL'
             
             if (parentLi.textContent.trim() === '') {
-              document.execCommand('insertHTML', false, '<br><br>')
+              // Break out of the list
+              const remainingItems = []
+              let nextSibling = parentLi.nextElementSibling
+              
+              // Collect all items after the current empty one
+              while (nextSibling) {
+                const temp = nextSibling.nextElementSibling
+                remainingItems.push(nextSibling.cloneNode(true))
+                nextSibling.remove()
+                nextSibling = temp
+              }
+              
+              // Remove the empty list item
+              parentLi.remove()
+              
+              // Create a paragraph break
+              let htmlToInsert = '<p><br></p>'
+              
+              // If there are remaining items, create a new list
+              if (remainingItems.length > 0) {
+                const listTag = isOrderedList ? 'ol' : 'ul'
+                htmlToInsert += `<${listTag}>`
+                remainingItems.forEach(item => {
+                  htmlToInsert += item.outerHTML
+                })
+                htmlToInsert += `</${listTag}>`
+              }
+              
+              // Insert after the current list
+              const tempDiv = document.createElement('div')
+              tempDiv.innerHTML = htmlToInsert
+              
+              let insertPoint = listContainer.nextSibling
+              const parent = listContainer.parentNode
+              
+              while (tempDiv.firstChild) {
+                parent.insertBefore(tempDiv.firstChild, insertPoint)
+              }
+              
+              // Position cursor in the paragraph
+              const newP = listContainer.nextElementSibling
+              if (newP && newP.tagName === 'P') {
+                const newRange = document.createRange()
+                const sel = window.getSelection()
+                newRange.setStart(newP, 0)
+                newRange.collapse(true)
+                sel.removeAllRanges()
+                sel.addRange(newRange)
+              }
+              
             } else {
-              const newLi = isOrderedList ? '<li></li>' : '<li></li>'
+              const newLi = '<li></li>'
               document.execCommand('insertHTML', false, newLi)
             }
             
