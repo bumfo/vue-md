@@ -759,7 +759,7 @@ export default {
                 const firstChildToMove = nextSibling.firstChild
                 // Move all children from next container to current container
                 while (nextSibling.firstChild) {
-                  previousElement.appendChild(nextSibling.firstChild)
+                  containerToCompareWith.appendChild(nextSibling.firstChild)
                 }
                 nextSibling.remove()
                 console.log('mergeWithPrevious: removed next container after merge')
