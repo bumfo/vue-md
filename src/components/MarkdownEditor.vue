@@ -215,6 +215,17 @@ export default {
       this.setCursorAtStart(p)
       return true
     },
+
+    resetBlockToParagraphWithEnter(blockElement) {
+      // Convert styled block to paragraph and add new line
+      const p = document.createElement('p')
+      p.innerHTML = '<br>'
+      blockElement.parentNode.replaceChild(p, blockElement)
+      
+      // Position cursor at the start of the new paragraph
+      this.setCursorAtStart(p)
+      return true
+    },
     
     mergeParagraphWithPrevious(blockElement) {
       const previousElement = this.getPreviousBlockElement(blockElement)
@@ -225,7 +236,10 @@ export default {
       if (previousType === 'paragraph' || previousType === 'heading') {
         // Merge content into previous element, keeping previous element's style
         const cursorPosition = previousElement.textContent.length
-        previousElement.innerHTML += blockElement.innerHTML
+        
+        // Extract only the inline content, stripping block styling from spans
+        const cleanedContent = this.extractInlineContent(blockElement)
+        previousElement.innerHTML += cleanedContent
         blockElement.remove()
         
         // Position cursor at the merge point
@@ -332,6 +346,139 @@ export default {
       }
     },
 
+    extractInlineContent(element) {
+      // Clone the element to avoid modifying the original
+      const clone = element.cloneNode(true)
+      
+      // Remove spans that only contain block-level styling (style attribute)
+      const spans = clone.querySelectorAll('span[style]')
+      spans.forEach(span => {
+        const style = span.getAttribute('style')
+        // If span only has block-level styling, unwrap it but keep content
+        if (this.isBlockLevelStyling(style)) {
+          const parent = span.parentNode
+          while (span.firstChild) {
+            parent.insertBefore(span.firstChild, span)
+          }
+          parent.removeChild(span)
+        }
+      })
+      
+      return clone.innerHTML
+    },
+
+    isBlockLevelStyling(styleString) {
+      if (!styleString) return false
+      
+      const blockStyles = [
+        'font-size',
+        'font-weight: 600',
+        'font-weight: bold', 
+        'font-weight: 700',
+        'margin',
+        'padding',
+        'border',
+        'color: rgb(106, 115, 125)', // blockquote color
+        'line-height'
+      ]
+      
+      return blockStyles.some(blockStyle => 
+        styleString.includes(blockStyle)
+      ) && !this.hasInlineStyles(styleString)
+    },
+
+    hasInlineStyles(styleString) {
+      const inlineStyles = [
+        'font-weight: bold',
+        'font-weight: 600', 
+        'font-weight: 700',
+        'font-style: italic',
+        'text-decoration: underline',
+        'text-decoration: line-through'
+      ]
+      
+      return inlineStyles.some(inlineStyle => 
+        styleString.includes(inlineStyle)
+      )
+    },
+
+    isAtEndOfInlineElement(range) {
+      if (!range.collapsed) return false
+      
+      const container = range.startContainer
+      const offset = range.startOffset
+      
+      // Check if cursor is at the end of a text node
+      if (container.nodeType === Node.TEXT_NODE) {
+        if (offset !== container.textContent.length) return false
+        
+        // Check if this text node is inside an inline element
+        let parent = container.parentElement
+        while (parent && parent !== this.$refs.editor) {
+          if (this.isInlineStyleElement(parent)) {
+            // Check if this is the last text content in the inline element
+            return this.isLastTextInElement(container, parent)
+          }
+          if (this.isBlockElement(parent)) break
+          parent = parent.parentElement
+        }
+      }
+      
+      return false
+    },
+
+    isInlineStyleElement(element) {
+      const inlineTags = ['STRONG', 'EM', 'B', 'I', 'CODE', 'U', 'S']
+      if (inlineTags.includes(element.tagName)) return true
+      
+      // Check for spans with inline styling
+      if (element.tagName === 'SPAN' && element.hasAttribute('style')) {
+        return this.hasInlineStyles(element.getAttribute('style'))
+      }
+      
+      return false
+    },
+
+    isLastTextInElement(textNode, element) {
+      const walker = document.createTreeWalker(
+        element,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      )
+      
+      let lastTextNode = null
+      let node
+      while (node = walker.nextNode()) {
+        lastTextNode = node
+      }
+      
+      return textNode === lastTextNode
+    },
+
+    insertCleanNewLine() {
+      // Insert a clean paragraph without inheriting inline styles
+      const p = document.createElement('p')
+      p.innerHTML = '<br>'
+      
+      const selection = window.getSelection()
+      const range = selection.getRangeAt(0)
+      
+      // Find the current block element
+      let currentBlock = range.startContainer
+      if (currentBlock.nodeType === Node.TEXT_NODE) {
+        currentBlock = currentBlock.parentElement
+      }
+      while (currentBlock && !this.isBlockElement(currentBlock)) {
+        currentBlock = currentBlock.parentElement
+      }
+      
+      if (currentBlock) {
+        currentBlock.parentNode.insertBefore(p, currentBlock.nextSibling)
+        this.setCursorAtStart(p)
+      }
+    },
+
     handleInput(event) {
       this.handleUserHtmlChange(event.target.innerHTML)
     },
@@ -384,6 +531,35 @@ export default {
         if (selection.rangeCount > 0) {
           const range = selection.getRangeAt(0)
           const container = range.commonAncestorContainer
+
+          // Check if we're in an empty styled block (non-p)
+          let currentBlock = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+          while (currentBlock && currentBlock !== this.$refs.editor) {
+            if (this.isBlockElement(currentBlock)) {
+              const blockType = this.getBlockType(currentBlock)
+              // If it's an empty styled block (not paragraph), reset to paragraph
+              if (blockType !== 'paragraph' && blockType !== 'listitem' && currentBlock.textContent.trim() === '') {
+                event.preventDefault()
+                this.resetBlockToParagraphWithEnter(currentBlock)
+                this.$nextTick(() => {
+                  this.handleUserHtmlChange(this.$refs.editor.innerHTML)
+                })
+                return
+              }
+              break
+            }
+            currentBlock = currentBlock.parentElement
+          }
+
+          // Check if we're at the end of an inline styled element
+          if (this.isAtEndOfInlineElement(range)) {
+            event.preventDefault()
+            this.insertCleanNewLine()
+            this.$nextTick(() => {
+              this.handleUserHtmlChange(this.$refs.editor.innerHTML)
+            })
+            return
+          }
 
           let parentLi = null
           if (container.nodeType === Node.TEXT_NODE) {

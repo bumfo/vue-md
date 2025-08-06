@@ -102,3 +102,55 @@ This pattern applies to any component where:
 - You need precise control over when DOM updates occur
 
 The key insight: **The source of a change determines its update path, not the data itself.**
+
+## Markdown Editing UX Philosophy
+
+### The Goal: Text-Like Behavior with Visual Styling
+Users should feel like they're editing markdown text, but with rich visual presentation instead of syntax markers. The editor should behave intuitively according to markdown semantics, not generic HTML editing rules.
+
+### Core Principle: Semantic Key Behaviors
+Keyboard interactions must follow markdown logic, not contenteditable defaults:
+
+#### Backspace at Block Boundaries
+**Problem**: Default contenteditable merges blocks unpredictably and doesn't respect markdown structure.
+
+**Solution**: Distinguish between range selection and single caret behavior:
+- **Range Selection**: Let browser handle deletion (normal text editing)  
+- **Single Caret at Block Start**: Apply markdown semantic rules
+
+#### Markdown Semantic Rules
+1. **Block Element Reset**: Heading/blockquote → paragraph (removes formatting)
+2. **Style Preservation**: When merging blocks, previous element's style wins
+3. **List Behavior**: First item exits list, others merge with previous item
+4. **Special Block Merging**: Code blocks merge with code blocks, otherwise convert to paragraph
+
+#### Implementation Pattern
+```javascript
+// Key distinction: collapsed range = single caret
+if (!range.collapsed) {
+  return false  // Let browser handle selection deletion
+}
+
+// Only apply custom behavior for single caret at block start
+if (isAtBlockStart) {
+  // Apply markdown semantic rules
+}
+```
+
+### Why This Matters
+Without semantic key handling, users experience:
+- Unexpected block merging behaviors
+- Loss of markdown structure
+- Inconsistent formatting results
+- Non-intuitive editing experience
+
+With semantic handling, editing feels natural and predictable, matching how users expect markdown to behave in text editors but with the benefit of visual styling.
+
+### Application Beyond Backspace
+This philosophy extends to all key interactions:
+- **Enter**: Create appropriate block types based on context
+- **Tab**: Proper indentation within lists and code blocks  
+- **Cut/Copy/Paste**: Preserve markdown structure
+- **Undo/Redo**: Maintain semantic operation boundaries
+
+The goal is seamless markdown editing where the visual interface enhances rather than interferes with the underlying markdown logic.
