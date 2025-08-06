@@ -38,11 +38,12 @@ export default {
         // Programmatic HTML update - update internal state and DOM
         this.internalHtml = html
         if (this.$refs.editor && this.$refs.editor.innerHTML !== html) {
+          console.log('setHtml', html)
           this.$refs.editor.innerHTML = html
         }
       }
     },
-    
+
     markdownContent: {
       get() {
         // Always compute markdown from current HTML content
@@ -56,15 +57,19 @@ export default {
         if (!this.md) {
           throw new Error('MarkdownIt not initialized')
         }
-        this.htmlContent = this.md.render(markdown)
+        // Only update if markdown actually changed to avoid unnecessary DOM updates
+        if (markdown !== this.markdownContent) {
+          console.log('setMarkdown', markdown)
+          this.htmlContent = this.md.render(markdown)
+        }
       }
     }
   },
-  
+
   created() {
     this.initializeServices()
   },
-  
+
   mounted() {
     // Initialize from prop after DOM and services are ready
     this.markdownContent = this.value
@@ -93,8 +98,8 @@ export default {
         }
       })
     },
-    
-    
+
+
     handleUserHtmlChange(html) {
       // User action - update internal HTML and emit markdown changes
       this.internalHtml = html
@@ -226,8 +231,10 @@ export default {
   watch: {
     value: {
       handler(newValue) {
-        // External prop change - update internal state via computed setter
-        this.markdownContent = newValue
+        if (this.markdownContent !== newValue) {
+          // External prop change - update internal state via computed setter
+          this.markdownContent = newValue
+        }
       },
       immediate: false
     }
