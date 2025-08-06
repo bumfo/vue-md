@@ -83,11 +83,10 @@ export default {
       this.isUserEditing = true
       const html = event.target.innerHTML
       this.updateMarkdownFromHtml(html)
-
-      clearTimeout(this.editingTimeout)
-      this.editingTimeout = setTimeout(() => {
-        this.isUserEditing = false
-      }, 500)
+      
+      this.$nextTick(() => {
+        this.resetUserEditing()
+      })
     },
 
     handlePaste(event) {
@@ -110,11 +109,7 @@ export default {
 
       this.$nextTick(() => {
         this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-
-        clearTimeout(this.editingTimeout)
-        this.editingTimeout = setTimeout(() => {
-          this.isUserEditing = false
-        }, 500)
+        this.resetUserEditing()
       })
     },
 
@@ -126,8 +121,9 @@ export default {
         document.execCommand('insertHTML', false, '&nbsp;&nbsp;&nbsp;&nbsp;')
         this.$nextTick(() => {
           this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-          this.resetEditingTimeout()
+          this.resetUserEditing()
         })
+        return
       }
 
       if (event.key === 'Enter') {
@@ -207,14 +203,20 @@ export default {
 
             this.$nextTick(() => {
               this.updateMarkdownFromHtml(this.$refs.editor.innerHTML)
-              this.resetEditingTimeout()
+              this.resetUserEditing()
             })
+            return
           }
         }
       }
+      
+      // For any other key, reset editing state after a delay
+      this.$nextTick(() => {
+        this.resetUserEditing()
+      })
     },
 
-    resetEditingTimeout() {
+    resetUserEditing() {
       clearTimeout(this.editingTimeout)
       this.editingTimeout = setTimeout(() => {
         this.isUserEditing = false
