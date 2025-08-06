@@ -196,18 +196,22 @@ export default {
 
     handleBlockBackspace(blockElement, blockType) {
       console.log('block backspace', blockType)
-      switch (blockType) {
-        case 'heading':
-        case 'blockquote':
+      
+      const container = blockElement.parentElement
+      const isInContainer = this.isContainerElement(container)
+      
+      if (isInContainer) {
+        // Block is inside a container - exit the container
+        return this.exitContainer(blockElement, container)
+      } else {
+        // Block is at root level
+        if (blockType === 'paragraph') {
+          // Paragraph at root - merge with previous
+          return this.mergeWithPrevious(blockElement)
+        } else {
+          // Styled block at root (h1-h6, blockquote, pre) - reset to paragraph
           return this.resetBlockToParagraph(blockElement)
-        case 'paragraph':
-          return this.mergeParagraphWithPrevious(blockElement)
-        case 'listitem':
-          return this.handleListItemBackspace(blockElement)
-        case 'codeblock':
-          return this.handleCodeBlockBackspace(blockElement)
-        default:
-          return false
+        }
       }
     },
 
@@ -536,31 +540,302 @@ export default {
       document.execCommand('insertHTML', false, '<p><br></p>')
     },
 
+    // === UNIFIED CONTAINER/BLOCK OPERATIONS ===
+    
+    exitContainer(blockElement, container) {
+      // Move block out of container - handles li, blockquote > p, pre > code uniformly
+      const content = this.extractInlineContent(blockElement)
+      const newParagraph = document.createElement('p')
+      newParagraph.innerHTML = content || '<br>'
+      
+      // Insert before the container
+      container.parentNode.insertBefore(newParagraph, container)
+      
+      // Remove the block from container
+      blockElement.remove()
+      
+      // If container is now empty, remove it
+      if (container.textContent.trim() === '') {
+        container.remove()
+      }
+      
+      // Check for container merging after the operation
+      this.mergeAdjacentContainers(newParagraph)
+      
+      // Position cursor and try to merge with previous
+      this.setCursorAtStart(newParagraph)
+      this.$nextTick(() => {
+        this.mergeWithPrevious(newParagraph)
+      })
+      
+      return true
+    },
+    
+    mergeWithPrevious(blockElement) {
+      // Unified merge logic for any block with its previous element
+      const previousElement = this.getPreviousBlockElement(blockElement)
+      if (!previousElement) return false
+      
+      const previousType = this.getBlockType(previousElement)
+      const previousContainer = previousElement.parentElement
+      const currentContainer = blockElement.parentElement
+      
+      // Check if both elements are in same type containers or both at root
+      const canMerge = (
+        (previousContainer === currentContainer) || // Same container
+        (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) || // Both at root
+        (this.isContainerElement(previousContainer) && this.isContainerElement(currentContainer) && 
+         previousContainer.tagName === currentContainer.tagName) // Same container type
+      )
+      
+      if (!canMerge) return false
+      
+      if (previousType === 'paragraph' || previousType === 'heading') {
+        const cursorPosition = previousElement.textContent.length
+        const currentContent = this.extractInlineContent(blockElement)
+        
+        // Position cursor at end of previous element
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.setStart(previousElement, previousElement.childNodes.length)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        
+        // Use execCommand to insert content
+        document.execCommand('insertHTML', false, currentContent)
+        
+        // Remove current block
+        const blockContainer = blockElement.parentElement
+        blockElement.remove()
+        
+        // If container is now empty, remove it
+        if (this.isContainerElement(blockContainer) && blockContainer.textContent.trim() === '') {
+          blockContainer.remove()
+        }
+        
+        // Check for container merging
+        this.mergeAdjacentContainers(previousElement)
+        
+        // Position cursor
+        this.setCursorPosition(previousElement, cursorPosition)
+        return true
+      }
+      
+      return false
+    },
+    
+    splitOrExitContainer(blockElement, container) {
+      // Split container or exit if at end - handles empty li, blockquote > p, etc.
+      const isLastChild = !blockElement.nextElementSibling
+      
+      if (isLastChild) {
+        // At end of container - just exit
+        return this.exitContainer(blockElement, container)
+      } else {
+        // In middle of container - split it
+        return this.splitContainer(blockElement, container)
+      }
+    },
+    
+    splitContainer(blockElement, container) {
+      // Split container at the empty block position
+      const containerType = container.tagName.toLowerCase()
+      const remainingElements = []
+      
+      // Collect elements after the empty block
+      let nextSibling = blockElement.nextElementSibling
+      while (nextSibling) {
+        const temp = nextSibling.nextElementSibling
+        remainingElements.push(nextSibling.cloneNode(true))
+        nextSibling.remove()
+        nextSibling = temp
+      }
+      
+      // Remove the empty block
+      blockElement.remove()
+      
+      // Create paragraph where the empty block was
+      const newParagraph = document.createElement('p')
+      newParagraph.innerHTML = '<br>'
+      container.parentNode.insertBefore(newParagraph, container.nextSibling)
+      
+      // Create new container with remaining elements if any
+      if (remainingElements.length > 0) {
+        const newContainer = document.createElement(containerType)
+        remainingElements.forEach(element => {
+          newContainer.appendChild(element)
+        })
+        newParagraph.parentNode.insertBefore(newContainer, newParagraph.nextSibling)
+      }
+      
+      // Position cursor in the new paragraph
+      this.setCursorAtStart(newParagraph)
+      return true
+    },
+    
+    mergeAdjacentContainers(referenceElement) {
+      // Check if operation created adjacent containers of same type that should be merged
+      let current = referenceElement
+      
+      // Check previous sibling
+      const prevSibling = current.previousElementSibling
+      if (prevSibling && this.isContainerElement(prevSibling)) {
+        const nextSibling = current.nextElementSibling
+        if (nextSibling && this.isContainerElement(nextSibling) && 
+            prevSibling.tagName === nextSibling.tagName) {
+          // We have container + paragraph + same-container -> merge containers
+          
+          // Move all children from nextSibling to prevSibling
+          while (nextSibling.firstChild) {
+            prevSibling.appendChild(nextSibling.firstChild)
+          }
+          
+          // Remove the paragraph and second container
+          current.remove()
+          nextSibling.remove()
+        }
+      }
+    },
+    
+    findEmptyBlock(container) {
+      // Find any empty block that needs special enter handling
+      let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+      let foundBlock = null
+      let containerElement = null
+
+      while (currentElement && currentElement !== this.$refs.editor) {
+        if (this.isBlockElement(currentElement)) {
+          if (!foundBlock) {
+            foundBlock = currentElement
+          }
+
+          const parent = currentElement.parentElement
+          if (parent && this.isContainerElement(parent)) {
+            containerElement = parent
+          }
+
+          break
+        }
+        currentElement = currentElement.parentElement
+      }
+
+      if (foundBlock && foundBlock.textContent.trim() === '') {
+        const blockType = this.getBlockType(foundBlock)
+        const hasContainer = containerElement !== null
+
+        if (blockType !== 'paragraph' || hasContainer) {
+          return {block: foundBlock, container: containerElement}
+        }
+      }
+
+      return null
+    },
+    
+    findBlockInContainer(container) {
+      // Find block inside a container for non-empty enter handling
+      let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+      let foundBlock = null
+      let containerElement = null
+
+      while (currentElement && currentElement !== this.$refs.editor) {
+        if (this.isBlockElement(currentElement)) {
+          if (!foundBlock) {
+            foundBlock = currentElement
+          }
+
+          const parent = currentElement.parentElement
+          if (parent && this.isContainerElement(parent)) {
+            containerElement = parent
+            break
+          }
+        }
+        currentElement = currentElement.parentElement
+      }
+
+      if (foundBlock && containerElement) {
+        return {block: foundBlock, container: containerElement}
+      }
+      
+      return null
+    },
+    
+    handleNonEmptyBlockEnter(blockInfo, range) {
+      // Handle enter in non-empty block inside container (like li with content)
+      const {block} = blockInfo
+      const containerType = blockInfo.container.tagName.toLowerCase()
+      
+      if (this.isCursorAtEndOfElement(range, block)) {
+        // At end - create new block in container
+        const newBlockTag = block.tagName.toLowerCase()
+        const newRange = document.createRange()
+        const selection = window.getSelection()
+        newRange.setStartAfter(block)
+        newRange.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(newRange)
+        
+        document.execCommand('insertHTML', false, `<${newBlockTag}><br></${newBlockTag}>`)
+        
+        // Position cursor in the new block
+        const newBlock = block.nextElementSibling
+        if (newBlock) {
+          this.setCursorAtStart(newBlock)
+        }
+        
+        return true
+      }
+      
+      // In middle of content - let default behavior handle splitting
+      return false
+    },
+    
+    isCursorAtEndOfElement(range, element) {
+      if (!range.collapsed) return false
+      
+      const container = range.startContainer
+      const offset = range.startOffset
+      
+      const walker = document.createTreeWalker(
+          element,
+          NodeFilter.SHOW_TEXT,
+          null,
+          false
+      )
+      
+      let totalLength = 0
+      let currentPosition = 0
+      let node
+      
+      while (node = walker.nextNode()) {
+        if (node === container) {
+          currentPosition = totalLength + offset
+        }
+        totalLength += node.textContent.length
+      }
+      
+      return currentPosition === totalLength
+    },
+
     handleEnter(range) {
       const container = range.commonAncestorContainer
 
-      // Priority 1: Check if we're in a list item (highest priority)
-      let parentLi = null
-      if (container.nodeType === Node.TEXT_NODE) {
-        parentLi = container.parentElement.closest('li')
-      } else {
-        parentLi = container.closest && container.closest('li')
+      // Priority 1: Check if we're in an empty block (any block type)
+      const emptyBlock = this.findEmptyBlock(container)
+      if (emptyBlock) {
+        return this.handleEmptyBlockEnter(emptyBlock)
       }
 
-      if (parentLi) {
-        return this.handleListItemEnter(parentLi)
-      }
-
-      // Priority 2: Check if we're in an empty styled block (including nested)
-      const emptyStyledBlock = this.findEmptyStyledBlock(container)
-      if (emptyStyledBlock) {
-        return this.handleEmptyBlockEnter(emptyStyledBlock)
-      }
-
-      // Priority 3: Check if we're at the end of an inline styled element
+      // Priority 2: Check if we're at the end of an inline styled element
       if (this.isAtEndOfInlineElement(range)) {
         this.insertCleanNewLine()
         return true
+      }
+
+      // Priority 3: Check if we're in a container for new block creation
+      const blockInContainer = this.findBlockInContainer(container)
+      if (blockInContainer && blockInContainer.block.textContent.trim() !== '') {
+        return this.handleNonEmptyBlockEnter(blockInContainer, range)
       }
 
       // Let default behavior handle normal cases
@@ -612,35 +887,11 @@ export default {
       const {block, container} = blockInfo
 
       if (container) {
-        // Block is inside a container - move it outside the container
-        const newParagraph = document.createElement('p')
-        newParagraph.innerHTML = '<br>'
-
-        // Insert the new paragraph after the container
-        container.parentNode.insertBefore(newParagraph, container.nextSibling)
-
-        // Remove the block from the container
-        block.remove()
-
-        // If container is now empty, remove it too
-        if (container.textContent.trim() === '') {
-          container.remove()
-        }
-
-        // Position cursor in the new paragraph
-        this.setCursorAtStart(newParagraph)
-        return true
+        // Block is inside a container - split or exit the container
+        return this.splitOrExitContainer(block, container)
       } else {
-        // Block is not in a container - convert to paragraph using execCommand
-        const range = document.createRange()
-        const selection = window.getSelection()
-        range.selectNode(block)
-        selection.removeAllRanges()
-        selection.addRange(range)
-
-        // Use execCommand to replace with paragraph
-        document.execCommand('formatBlock', false, 'p')
-        return true
+        // Block is not in a container - reset to paragraph
+        return this.resetBlockToParagraph(block)
       }
     },
 
