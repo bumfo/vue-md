@@ -401,6 +401,9 @@ export default class MarkdownBlockEditor {
       blockElement.remove()
     }
     
+    // Store a reference for later use
+    let insertedParagraph = newParagraph
+    
     // Insert new paragraph after container
     if (this.useExecCommandOnly) {
       const range = document.createRange()
@@ -412,14 +415,16 @@ export default class MarkdownBlockEditor {
       
       this.insertHTML(newParagraph.outerHTML)
       
+      // Update reference to the actually inserted paragraph
+      insertedParagraph = container.nextElementSibling
+      
       // Create new container with remaining items if needed
       if (remainingItems.length > 0) {
         const newContainer = document.createElement(container.tagName)
         remainingItems.forEach(item => newContainer.appendChild(item))
         
-        const insertedP = container.nextElementSibling
-        if (insertedP) {
-          range.setStartAfter(insertedP)
+        if (insertedParagraph) {
+          range.setStartAfter(insertedParagraph)
           range.collapse(true)
           selection.removeAllRanges()
           selection.addRange(range)
@@ -428,11 +433,12 @@ export default class MarkdownBlockEditor {
       }
     } else {
       container.parentNode.insertBefore(newParagraph, container.nextSibling)
+      // insertedParagraph is already correct for direct DOM manipulation
       
       if (remainingItems.length > 0) {
         const newContainer = document.createElement(container.tagName)
         remainingItems.forEach(item => newContainer.appendChild(item))
-        newParagraph.parentNode.insertBefore(newContainer, newParagraph.nextSibling)
+        insertedParagraph.parentNode.insertBefore(newContainer, insertedParagraph.nextSibling)
       }
     }
     
@@ -450,10 +456,12 @@ export default class MarkdownBlockEditor {
       }
     }
     
-    // Position cursor in new paragraph
-    const insertedP = this.editor.querySelector('p:last-of-type')
-    if (insertedP) {
-      this.setCursorAtStart(insertedP)
+    // Check for container merging after the operation, but preserve split from container exits
+    if (insertedParagraph) {
+      this.mergeAdjacentContainers(insertedParagraph, true) // preserveSplit=true
+      
+      // Position cursor in the new paragraph
+      this.setCursorAtStart(insertedParagraph)
     }
     
     return true
@@ -615,6 +623,19 @@ export default class MarkdownBlockEditor {
         } else {
           blockContainer.remove()
         }
+      }
+      
+      // Check for container merging - need to find the right context (CRITICAL MISSING LOGIC)
+      // If previousElement is in a container, check if we created a merge opportunity
+      const prevContainer = previousElement.parentElement
+      if (this.isContainerElement(prevContainer)) {
+        // Check siblings of the container for merge opportunities
+        const nextSibling = prevContainer.nextElementSibling
+        if (nextSibling && nextSibling.tagName === 'P') {
+          this.mergeAdjacentContainers(nextSibling)
+        }
+      } else {
+        this.mergeAdjacentContainers(previousElement)
       }
       
       // Position cursor at merge point
