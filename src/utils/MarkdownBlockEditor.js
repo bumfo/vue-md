@@ -31,9 +31,16 @@ export default class MarkdownBlockEditor {
     return element && containerTags.includes(element.tagName)
   }
 
-  isInlineElement(element) {
-    const inlineTags = ['STRONG', 'EM', 'B', 'I', 'CODE', 'U', 'S', 'SPAN']
-    return element && inlineTags.includes(element.tagName)
+  isInlineStyleElement(element) {
+    const inlineTags = ['STRONG', 'EM', 'B', 'I', 'CODE', 'U', 'S']
+    if (inlineTags.includes(element.tagName)) return true
+
+    // Check for spans with inline styling
+    if (element.tagName === 'SPAN' && element.hasAttribute('style')) {
+      return this.hasInlineStyles(element.getAttribute('style'))
+    }
+
+    return false
   }
 
   getBlockType(element) {
@@ -47,12 +54,8 @@ export default class MarkdownBlockEditor {
     return 'unknown'
   }
 
-  // ========== SELECTION & RANGE UTILITIES ==========
+  // ========== SELECTION & CURSOR UTILITIES ==========
   
-  /**
-   * Get current cursor context
-   * @returns {Object|null} Cursor context with selection, range, and position info
-   */
   getCursorContext() {
     const selection = window.getSelection()
     if (!selection.rangeCount) return null
@@ -69,9 +72,6 @@ export default class MarkdownBlockEditor {
     }
   }
 
-  /**
-   * Set cursor at the start of an element
-   */
   setCursorAtStart(element) {
     const range = document.createRange()
     const selection = window.getSelection()
@@ -81,10 +81,7 @@ export default class MarkdownBlockEditor {
     selection.addRange(range)
   }
 
-  /**
-   * Set cursor at a specific text position within an element
-   */
-  setCursorAtPosition(element, position) {
+  setCursorPosition(element, position) {
     const walker = document.createTreeWalker(
       element,
       NodeFilter.SHOW_TEXT,
@@ -117,34 +114,8 @@ export default class MarkdownBlockEditor {
     }
   }
 
-  /**
-   * Position cursor after a specific node
-   */
-  setCursorAfter(node) {
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.setStartAfter(node)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }
-
-  /**
-   * Select an entire node
-   */
-  selectNode(node) {
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.selectNode(node)
-    selection.removeAllRanges()
-    selection.addRange(range)
-  }
-
   // ========== POSITION CHECKING ==========
   
-  /**
-   * Check if cursor is at the start of a block element
-   */
   isAtBlockStart(container, offset) {
     if (offset !== 0) return { atStart: false }
 
@@ -164,9 +135,6 @@ export default class MarkdownBlockEditor {
     return { atStart: false }
   }
 
-  /**
-   * Get text content before cursor position
-   */
   getTextBeforeCursor(blockElement, container, offset) {
     if (container.nodeType === Node.ELEMENT_NODE && offset === 0) {
       return ''
@@ -194,9 +162,42 @@ export default class MarkdownBlockEditor {
     return textBefore.trim()
   }
 
-  /**
-   * Check if cursor is at the end of an element
-   */
+  isAtEndOfInlineElement() {
+    const context = this.getCursorContext()
+    if (!context || !context.collapsed) return false
+
+    const { container, offset } = context
+
+    if (container.nodeType === Node.TEXT_NODE) {
+      if (offset !== container.textContent.length) return false
+
+      let parent = container.parentElement
+      while (parent && parent !== this.editor) {
+        if (this.isInlineStyleElement(parent)) {
+          // Check if this is the last text in the inline element
+          const walker = document.createTreeWalker(
+            parent,
+            NodeFilter.SHOW_TEXT,
+            null,
+            false
+          )
+          
+          let lastTextNode = null
+          let node
+          while (node = walker.nextNode()) {
+            lastTextNode = node
+          }
+          
+          return container === lastTextNode
+        }
+        if (this.isBlockElement(parent)) break
+        parent = parent.parentElement
+      }
+    }
+
+    return false
+  }
+
   isAtEndOfElement(element) {
     const context = this.getCursorContext()
     if (!context || !context.collapsed) return false
@@ -224,92 +225,9 @@ export default class MarkdownBlockEditor {
     return currentPosition === totalLength
   }
 
-  /**
-   * Check if at end of inline element
-   */
-  isAtEndOfInlineElement() {
-    const context = this.getCursorContext()
-    if (!context || !context.collapsed) return false
-
-    const { container, offset } = context
-
-    if (container.nodeType === Node.TEXT_NODE) {
-      if (offset !== container.textContent.length) return false
-
-      let parent = container.parentElement
-      while (parent && parent !== this.editor) {
-        if (this.isInlineElement(parent)) {
-          // Check if this is the last text in the inline element
-          const walker = document.createTreeWalker(
-            parent,
-            NodeFilter.SHOW_TEXT,
-            null,
-            false
-          )
-          
-          let lastTextNode = null
-          let node
-          while (node = walker.nextNode()) {
-            lastTextNode = node
-          }
-          
-          return container === lastTextNode
-        }
-        if (this.isBlockElement(parent)) break
-        parent = parent.parentElement
-      }
-    }
-
-    return false
-  }
-
-  // ========== BLOCK CONTEXT & NAVIGATION ==========
+  // ========== BLOCK NAVIGATION ==========
   
-  /**
-   * Find the block context for the current cursor position
-   */
-  findBlockContext(startNode = null) {
-    const context = startNode ? { container: startNode } : this.getCursorContext()
-    if (!context) return null
-
-    let currentElement = context.container.nodeType === Node.TEXT_NODE 
-      ? context.container.parentElement 
-      : context.container
-    
-    let foundBlock = null
-    let containerElement = null
-
-    while (currentElement && currentElement !== this.editor) {
-      if (this.isBlockElement(currentElement)) {
-        foundBlock = currentElement
-        
-        const parent = currentElement.parentElement
-        if (parent && this.isContainerElement(parent)) {
-          containerElement = parent
-        }
-        break
-      }
-      currentElement = currentElement.parentElement
-    }
-
-    if (foundBlock) {
-      return {
-        block: foundBlock,
-        container: containerElement,
-        blockType: this.getBlockType(foundBlock),
-        isEmpty: foundBlock.textContent.trim() === '',
-        isInContainer: containerElement !== null,
-        isLastInContainer: containerElement && !foundBlock.nextElementSibling
-      }
-    }
-
-    return null
-  }
-
-  /**
-   * Get the previous block element (handles nested containers)
-   */
-  getPreviousBlock(element) {
+  getPreviousBlockElement(element) {
     let prev = element.previousElementSibling
     
     while (prev) {
@@ -325,30 +243,11 @@ export default class MarkdownBlockEditor {
       prev = prev.previousElementSibling
     }
     
-    // Check parent's previous sibling if in a container
-    const parent = element.parentElement
-    if (this.isContainerElement(parent)) {
-      const parentPrev = parent.previousElementSibling
-      if (parentPrev) {
-        if (this.isBlockElement(parentPrev)) {
-          return parentPrev
-        } else if (this.isContainerElement(parentPrev)) {
-          const lastChild = parentPrev.lastElementChild
-          if (lastChild && this.isBlockElement(lastChild)) {
-            return lastChild
-          }
-        }
-      }
-    }
-    
     return null
   }
 
   // ========== CONTENT EXTRACTION ==========
   
-  /**
-   * Extract inline content from a block, removing block-level styling
-   */
   extractInlineContent(element) {
     const clone = element.cloneNode(true)
     
@@ -374,6 +273,9 @@ export default class MarkdownBlockEditor {
 
     const blockStyles = [
       'font-size',
+      'font-weight: 600',
+      'font-weight: bold',
+      'font-weight: 700',
       'margin',
       'padding',
       'border',
@@ -400,105 +302,114 @@ export default class MarkdownBlockEditor {
     return inlineStyles.some(style => styleString.includes(style))
   }
 
-  // ========== EXECCOMMAND OPERATIONS ==========
+  // ========== DOM OPERATIONS ==========
   
-  /**
-   * Execute a command with optional fallback to direct DOM manipulation
-   */
   executeCommand(command, value = null) {
     if (this.useExecCommandOnly) {
       return document.execCommand(command, false, value)
     }
-    // Could implement direct DOM manipulation fallbacks here
+    // Direct DOM manipulation fallbacks handled in individual methods
     return false
   }
 
-  /**
-   * Insert HTML at current cursor position
-   */
   insertHTML(html) {
     return this.executeCommand('insertHTML', html)
   }
 
-  /**
-   * Delete current selection
-   */
   deleteSelection() {
     return this.executeCommand('delete')
   }
 
-  /**
-   * Format current block
-   */
-  formatBlock(tagName) {
-    return this.executeCommand('formatBlock', tagName)
-  }
-
-  // ========== BLOCK OPERATIONS ==========
+  // ========== BLOCK OPERATIONS - CORE LOGIC FROM LEGACY ==========
   
-  /**
-   * Replace a block element with a new one
-   */
-  replaceBlock(oldBlock, newBlock) {
-    if (this.useExecCommandOnly) {
-      this.selectNode(oldBlock)
-      return this.insertHTML(newBlock.outerHTML)
-    } else {
-      oldBlock.parentNode.replaceChild(newBlock, oldBlock)
-      return true
-    }
-  }
-
-  /**
-   * Remove a block element
-   */
-  removeBlock(block) {
-    if (this.useExecCommandOnly) {
-      this.selectNode(block)
-      return this.deleteSelection()
-    } else {
-      block.remove()
-      return true
-    }
-  }
-
-  /**
-   * Reset a styled block to paragraph
-   */
-  resetBlockToParagraph(block) {
+  resetBlockToParagraph(blockElement) {
     const p = document.createElement('p')
-    p.innerHTML = block.innerHTML || '<br>'
-    this.replaceBlock(block, p)
-    this.setCursorAtStart(p)
+    p.innerHTML = blockElement.innerHTML || '<br>'
+    
+    if (this.useExecCommandOnly) {
+      // Use execCommand approach - store parent before deletion
+      const parent = blockElement.parentElement
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.selectNode(blockElement)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      
+      this.insertHTML(p.outerHTML)
+      
+      // Find the newly inserted paragraph and position cursor
+      // The paragraph should be at the selection position after insertHTML
+      const context = this.getCursorContext()
+      if (context) {
+        let element = context.container.nodeType === Node.TEXT_NODE ? 
+          context.container.parentElement : context.container
+        
+        // Walk up to find the paragraph
+        while (element && element !== this.editor) {
+          if (element.tagName === 'P') {
+            this.setCursorAtStart(element)
+            break
+          }
+          element = element.parentElement
+        }
+      }
+    } else {
+      // Direct DOM manipulation
+      blockElement.parentNode.replaceChild(p, blockElement)
+      this.setCursorAtStart(p)
+    }
+    
     return true
   }
 
-  /**
-   * Exit a block from its container
-   */
-  exitContainer(block, container) {
-    this.log('exitContainer', { block: block.tagName, container: container.tagName })
+  exitContainer(blockElement, container) {
+    this.log('exitContainer', { block: blockElement.tagName, container: container.tagName })
     
-    const content = this.extractInlineContent(block)
+    const content = this.extractInlineContent(blockElement)
     const newParagraph = document.createElement('p')
     newParagraph.innerHTML = content || '<br>'
     
     // Collect remaining items after the block
     const remainingItems = []
-    let nextItem = block.nextElementSibling
+    let nextItem = blockElement.nextElementSibling
     while (nextItem) {
       remainingItems.push(nextItem.cloneNode(true))
       const temp = nextItem.nextElementSibling
-      this.removeBlock(nextItem)
+      if (this.useExecCommandOnly) {
+        // Use execCommand to remove
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.selectNode(nextItem)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.deleteSelection()
+      } else {
+        nextItem.remove()
+      }
       nextItem = temp
     }
     
     // Remove the current block
-    this.removeBlock(block)
+    if (this.useExecCommandOnly) {
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.selectNode(blockElement)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      this.deleteSelection()
+    } else {
+      blockElement.remove()
+    }
     
     // Insert new paragraph after container
     if (this.useExecCommandOnly) {
-      this.setCursorAfter(container)
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStartAfter(container)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      
       this.insertHTML(newParagraph.outerHTML)
       
       // Create new container with remaining items if needed
@@ -508,7 +419,10 @@ export default class MarkdownBlockEditor {
         
         const insertedP = container.nextElementSibling
         if (insertedP) {
-          this.setCursorAfter(insertedP)
+          range.setStartAfter(insertedP)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
           this.insertHTML(newContainer.outerHTML)
         }
       }
@@ -524,7 +438,16 @@ export default class MarkdownBlockEditor {
     
     // Clean up empty container
     if (container.children.length === 0) {
-      this.removeBlock(container)
+      if (this.useExecCommandOnly) {
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.selectNode(container)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.deleteSelection()
+      } else {
+        container.remove()
+      }
     }
     
     // Position cursor in new paragraph
@@ -536,28 +459,49 @@ export default class MarkdownBlockEditor {
     return true
   }
 
-  /**
-   * Split a container at the current block position
-   */
-  splitContainer(block, container) {
+  splitContainer(blockElement, container) {
     const containerType = container.tagName.toLowerCase()
     
     // Collect elements after the block
     const remainingElements = []
-    let nextSibling = block.nextElementSibling
+    let nextSibling = blockElement.nextElementSibling
     while (nextSibling) {
       remainingElements.push(nextSibling.cloneNode(true))
       const temp = nextSibling.nextElementSibling
-      this.removeBlock(nextSibling)
+      if (this.useExecCommandOnly) {
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.selectNode(nextSibling)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.deleteSelection()
+      } else {
+        nextSibling.remove()
+      }
       nextSibling = temp
     }
     
     // Remove the empty block
-    this.removeBlock(block)
+    if (this.useExecCommandOnly) {
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.selectNode(blockElement)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      this.deleteSelection()
+    } else {
+      blockElement.remove()
+    }
     
     // Create new paragraph
     if (this.useExecCommandOnly) {
-      this.setCursorAfter(container)
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStartAfter(container)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      
       this.insertHTML('<p><br></p>')
       
       // Create new container with remaining elements
@@ -567,7 +511,10 @@ export default class MarkdownBlockEditor {
         
         const insertedP = container.nextElementSibling
         if (insertedP) {
-          this.setCursorAfter(insertedP)
+          range.setStartAfter(insertedP)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
           this.insertHTML(newContainer.outerHTML)
         }
       }
@@ -594,95 +541,194 @@ export default class MarkdownBlockEditor {
     return true
   }
 
-  /**
-   * Merge current block with previous block
-   */
-  mergeWithPrevious(currentBlock, previousBlock) {
+  mergeWithPrevious(blockElement) {
     this.log('mergeWithPrevious', { 
-      current: currentBlock.tagName, 
-      previous: previousBlock.tagName 
+      block: blockElement.tagName, 
+      parent: blockElement.parentElement.tagName 
     })
     
-    const cursorPosition = previousBlock.textContent.length
-    const content = this.extractInlineContent(currentBlock)
-    
-    // Position at end of previous block
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.setStart(previousBlock, previousBlock.childNodes.length)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    
-    // Insert content
-    this.insertHTML(content)
-    
-    // Remove current block
-    const currentContainer = currentBlock.parentElement
-    this.removeBlock(currentBlock)
-    
-    // Clean up empty container
-    if (this.isContainerElement(currentContainer) && 
-        currentContainer.children.length === 0) {
-      this.removeBlock(currentContainer)
+    const previousElement = this.getPreviousBlockElement(blockElement)
+    if (!previousElement) {
+      this.log('mergeWithPrevious: no previous element found')
+      return false
     }
     
-    // Position cursor at merge point
-    this.setCursorAtPosition(previousBlock, cursorPosition)
+    const previousType = this.getBlockType(previousElement)
+    const previousContainer = previousElement.parentElement
+    const currentContainer = blockElement.parentElement
     
-    return true
-  }
-
-  /**
-   * Check and merge adjacent containers with empty paragraph between them
-   */
-  mergeAdjacentContainers(paragraph, preserveSplit = false) {
-    if (preserveSplit) return
+    // Allow merging in these cases - same as legacy logic
+    const canMerge = (
+      (previousContainer === currentContainer) || 
+      (!this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)) || 
+      (this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer))
+    )
     
-    // Only process root-level empty paragraphs
-    if (paragraph.tagName !== 'P' || 
-        this.isContainerElement(paragraph.parentElement) ||
-        (paragraph.textContent.trim() !== '' && paragraph.innerHTML !== '<br>')) {
-      return
+    if (!canMerge) {
+      this.log('mergeWithPrevious: cannot merge')
+      return false
     }
     
-    const prev = paragraph.previousElementSibling
-    const next = paragraph.nextElementSibling
+    // Check if this is cross-container merging (root element into container)
+    const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
     
-    // Check for same-type containers
-    if (prev && next &&
-        this.isContainerElement(prev) && 
-        this.isContainerElement(next) &&
-        prev.tagName === next.tagName) {
+    if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
+      // Direct merge with paragraph/heading at same level
+      const cursorPosition = previousElement.textContent.length
+      const currentContent = this.extractInlineContent(blockElement)
       
-      const lastChildOfFirst = prev.lastElementChild
+      // Position cursor at end of previous element
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStart(previousElement, previousElement.childNodes.length)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
       
-      // Move all children from next to prev
-      while (next.firstChild) {
-        prev.appendChild(next.firstChild)
+      // Insert content using execCommand
+      if (this.useExecCommandOnly) {
+        this.insertHTML(currentContent)
+      } else {
+        previousElement.innerHTML += currentContent
       }
       
-      // Remove empty paragraph and second container
-      this.removeBlock(paragraph)
-      this.removeBlock(next)
-      
-      // Position cursor at merge boundary
-      if (lastChildOfFirst && this.isBlockElement(lastChildOfFirst)) {
-        this.setCursorAtPosition(lastChildOfFirst, lastChildOfFirst.textContent.length)
+      // Remove current block
+      const blockContainer = blockElement.parentElement
+      if (this.useExecCommandOnly) {
+        const deleteRange = document.createRange()
+        deleteRange.selectNode(blockElement)
+        selection.removeAllRanges()
+        selection.addRange(deleteRange)
+        this.deleteSelection()
+      } else {
+        blockElement.remove()
       }
       
+      // Clean up empty container
+      if (this.isContainerElement(blockContainer) && blockContainer.children.length === 0) {
+        if (this.useExecCommandOnly) {
+          const deleteRange = document.createRange()
+          deleteRange.selectNode(blockContainer)
+          selection.removeAllRanges()
+          selection.addRange(deleteRange)
+          this.deleteSelection()
+        } else {
+          blockContainer.remove()
+        }
+      }
+      
+      // Position cursor at merge point
+      this.setCursorPosition(previousElement, cursorPosition)
       return true
+    } else if (blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement)) {
+      // Root-level paragraph merging into container - complex logic from legacy
+      const hasContent = blockElement.textContent.trim() !== '' && blockElement.innerHTML !== '<br>'
+      
+      if (hasContent) {
+        // Non-empty paragraph - merge into last block of previous container
+        const previousContainer = previousElement.parentElement
+        const lastChild = previousContainer.lastElementChild
+        
+        if (lastChild && this.isBlockElement(lastChild)) {
+          const cursorPosition = lastChild.textContent.length
+          const currentContent = this.extractInlineContent(blockElement)
+          
+          // Position cursor at end of last child in container
+          const range = document.createRange()
+          const selection = window.getSelection()
+          range.setStart(lastChild, lastChild.childNodes.length)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+          
+          // Insert content
+          if (this.useExecCommandOnly) {
+            this.insertHTML(currentContent)
+          } else {
+            lastChild.innerHTML += currentContent
+          }
+          
+          // Remove current block
+          if (this.useExecCommandOnly) {
+            const deleteRange = document.createRange()
+            deleteRange.selectNode(blockElement)
+            selection.removeAllRanges()
+            selection.addRange(deleteRange)
+            this.deleteSelection()
+          } else {
+            blockElement.remove()
+          }
+          
+          // Position cursor
+          this.setCursorPosition(lastChild, cursorPosition)
+          return true
+        }
+      } else {
+        // Empty paragraph - try container merging
+        this.mergeAdjacentContainers(blockElement)
+        return true
+      }
     }
     
     return false
   }
 
-  // ========== KEY HANDLERS ==========
+  mergeAdjacentContainers(referenceElement, preserveSplit = false) {
+    if (preserveSplit) return
+    
+    const current = referenceElement
+    
+    // Only consider root-level empty paragraphs
+    if (current.tagName !== 'P' || 
+        this.isContainerElement(current.parentElement) ||
+        (current.textContent.trim() !== '' && current.innerHTML !== '<br>')) {
+      return
+    }
+    
+    const prevSibling = current.previousElementSibling
+    const nextSibling = current.nextElementSibling
+    
+    // Check for same-type containers
+    if (prevSibling && nextSibling &&
+        this.isContainerElement(prevSibling) && 
+        this.isContainerElement(nextSibling) &&
+        prevSibling.tagName === nextSibling.tagName) {
+      
+      const originalLastChildOfFirst = prevSibling.lastElementChild
+      
+      // Move all children from nextSibling to prevSibling
+      while (nextSibling.firstChild) {
+        prevSibling.appendChild(nextSibling.firstChild)
+      }
+      
+      // Remove empty paragraph and second container
+      if (this.useExecCommandOnly) {
+        let range = document.createRange()
+        const selection = window.getSelection()
+        range.selectNode(current)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.deleteSelection()
+        
+        range = document.createRange()
+        range.selectNode(nextSibling)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.deleteSelection()
+      } else {
+        current.remove()
+        nextSibling.remove()
+      }
+      
+      // Position cursor at merge boundary
+      if (originalLastChildOfFirst && this.isBlockElement(originalLastChildOfFirst)) {
+        this.setCursorPosition(originalLastChildOfFirst, originalLastChildOfFirst.textContent.length)
+      }
+    }
+  }
+
+  // ========== MAIN HANDLERS ==========
   
-  /**
-   * Handle backspace key
-   * @returns {boolean} Whether the event was handled
-   */
   handleBackspace() {
     this.log('handleBackspace')
     
@@ -702,71 +748,38 @@ export default class MarkdownBlockEditor {
       return false
     }
     
-    const blockContext = this.findBlockContext(blockStart.blockElement)
-    if (!blockContext) return false
+    const blockElement = blockStart.blockElement
+    const blockType = this.getBlockType(blockElement)
+    const container = blockElement.parentElement
+    const isInContainer = this.isContainerElement(container)
     
-    this.log('Block context', blockContext)
+    this.log('Block context', { blockType, isInContainer })
     
-    // Handle based on context
-    if (blockContext.isInContainer) {
+    // Handle based on context - following legacy logic exactly
+    if (isInContainer) {
       // Exit container
-      return this.exitContainer(blockContext.block, blockContext.container)
-    } else if (blockContext.blockType === 'paragraph') {
+      return this.exitContainer(blockElement, container)
+    } else if (blockType === 'paragraph') {
       // Try to merge with previous
-      const previousBlock = this.getPreviousBlock(blockContext.block)
-      if (previousBlock) {
-        const success = this.mergeWithPrevious(blockContext.block, previousBlock)
-        
-        // Check for container merging after merge
-        if (success) {
-          const prevContainer = previousBlock.parentElement
-          if (this.isContainerElement(prevContainer)) {
-            const nextSibling = prevContainer.nextElementSibling
-            if (nextSibling && nextSibling.tagName === 'P') {
-              this.mergeAdjacentContainers(nextSibling)
-            }
-          }
-        }
-        
-        return success
-      }
+      return this.mergeWithPrevious(blockElement)
     } else {
       // Reset styled block to paragraph
-      return this.resetBlockToParagraph(blockContext.block)
+      return this.resetBlockToParagraph(blockElement)
     }
-    
-    return false
   }
 
-  /**
-   * Handle enter key
-   * @returns {boolean} Whether the event was handled
-   */
   handleEnter() {
     this.log('handleEnter')
     
     const context = this.getCursorContext()
     if (!context) return false
     
-    const blockContext = this.findBlockContext()
-    if (!blockContext) return false
+    const container = context.range.commonAncestorContainer
     
-    this.log('Block context', blockContext)
-    
-    // Priority 1: Empty block handling
-    if (blockContext.isEmpty) {
-      if (blockContext.isInContainer) {
-        if (blockContext.isLastInContainer) {
-          // Exit container
-          return this.exitContainer(blockContext.block, blockContext.container)
-        } else {
-          // Split container
-          return this.splitContainer(blockContext.block, blockContext.container)
-        }
-      } else if (blockContext.blockType !== 'paragraph') {
-        // Reset styled block to paragraph
-        return this.resetBlockToParagraph(blockContext.block)
-      }
+    // Priority 1: Check if we're in an empty block
+    const emptyBlock = this.findEmptyBlock(container)
+    if (emptyBlock) {
+      return this.handleEmptyBlockEnter(emptyBlock)
     }
     
     // Priority 2: End of inline element
@@ -776,34 +789,142 @@ export default class MarkdownBlockEditor {
     }
     
     // Priority 3: Non-empty block in container at end
-    if (blockContext.isInContainer && !blockContext.isEmpty) {
-      if (this.isAtEndOfElement(blockContext.block)) {
-        this.log('At end of block in container')
-        const newBlockTag = blockContext.block.tagName.toLowerCase()
-        
-        this.setCursorAfter(blockContext.block)
-        this.insertHTML(`<${newBlockTag}><br></${newBlockTag}>`)
-        
-        // Position cursor in new block
-        const newBlock = blockContext.block.nextElementSibling
-        if (newBlock) {
-          this.setCursorAtStart(newBlock)
-        }
-        
-        return true
-      }
+    const blockInContainer = this.findBlockInContainer(container)
+    if (blockInContainer && blockInContainer.block.textContent.trim() !== '') {
+      return this.handleNonEmptyBlockEnter(blockInContainer, context.range)
     }
     
     // Let browser handle default cases
     return false
   }
+  
+  findEmptyBlock(container) {
+    let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+    let foundBlock = null
+    let containerElement = null
 
-  /**
-   * Handle tab key
-   * @returns {boolean} Whether the event was handled
-   */
+    while (currentElement && currentElement !== this.editor) {
+      if (this.isBlockElement(currentElement)) {
+        if (!foundBlock) {
+          foundBlock = currentElement
+        }
+
+        const parent = currentElement.parentElement
+        if (parent && this.isContainerElement(parent)) {
+          containerElement = parent
+        }
+
+        break
+      }
+      currentElement = currentElement.parentElement
+    }
+
+    if (foundBlock && foundBlock.textContent.trim() === '') {
+      const blockType = this.getBlockType(foundBlock)
+      const hasContainer = containerElement !== null
+
+      if (blockType !== 'paragraph' || hasContainer) {
+        return { block: foundBlock, container: containerElement }
+      }
+    }
+
+    return null
+  }
+  
+  findBlockInContainer(container) {
+    let currentElement = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+    let foundBlock = null
+    let containerElement = null
+
+    while (currentElement && currentElement !== this.editor) {
+      if (this.isBlockElement(currentElement)) {
+        if (!foundBlock) {
+          foundBlock = currentElement
+        }
+
+        const parent = currentElement.parentElement
+        if (parent && this.isContainerElement(parent)) {
+          containerElement = parent
+          break
+        }
+      }
+      currentElement = currentElement.parentElement
+    }
+
+    if (foundBlock && containerElement) {
+      return { block: foundBlock, container: containerElement }
+    }
+
+    return null
+  }
+  
+  handleEmptyBlockEnter(blockInfo) {
+    const { block, container } = blockInfo
+
+    if (container) {
+      // Split or exit container
+      const isLastChild = !block.nextElementSibling
+      if (isLastChild) {
+        return this.exitContainer(block, container)
+      } else {
+        return this.splitContainer(block, container)
+      }
+    } else {
+      // Reset to paragraph
+      return this.resetBlockToParagraph(block)
+    }
+  }
+  
+  handleNonEmptyBlockEnter(blockInfo, range) {
+    const { block } = blockInfo
+    
+    if (this.isAtEndOfElement(block)) {
+      this.log('At end of block in container')
+      const newBlockTag = block.tagName.toLowerCase()
+      
+      const newRange = document.createRange()
+      const selection = window.getSelection()
+      newRange.setStartAfter(block)
+      newRange.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(newRange)
+      
+      if (this.useExecCommandOnly) {
+        this.insertHTML(`<${newBlockTag}><br></${newBlockTag}>`)
+      } else {
+        const newBlock = document.createElement(newBlockTag)
+        newBlock.innerHTML = '<br>'
+        block.parentNode.insertBefore(newBlock, block.nextSibling)
+      }
+      
+      // Position cursor in new block
+      const newBlock = block.nextElementSibling
+      if (newBlock) {
+        this.setCursorAtStart(newBlock)
+      }
+      
+      return true
+    }
+    
+    return false
+  }
+
   handleTab() {
-    this.insertHTML('&nbsp;&nbsp;&nbsp;&nbsp;')
+    if (this.useExecCommandOnly) {
+      this.insertHTML('&nbsp;&nbsp;&nbsp;&nbsp;')
+    } else {
+      // Direct insertion
+      const selection = window.getSelection()
+      if (selection.rangeCount > 0) {
+        const range = selection.getRangeAt(0)
+        const textNode = document.createTextNode('\u00A0\u00A0\u00A0\u00A0') // Non-breaking spaces
+        range.insertNode(textNode)
+        range.setStartAfter(textNode)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+      }
+    }
     return true
   }
 }
