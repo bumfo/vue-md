@@ -7,12 +7,23 @@
           {{ viewMode === 'editor' ? 'Preview' : 'Edit' }}
         </button>
         <button @click="copyMarkdown" class="copy-btn">Copy Markdown</button>
+        <label class="feature-toggle">
+          <input type="checkbox" v-model="useExecCommandOnly">
+          Use execCommand Only
+        </label>
+        <label class="feature-toggle">
+          <input type="checkbox" v-model="debugMode">
+          Debug Mode
+        </label>
       </div>
 
       <div class="editor-wrapper">
         <div v-if="viewMode === 'editor'" class="editor-layout">
           <div class="editor-pane">
-            <MarkdownEditor v-model="markdownContent"/>
+            <MarkdownEditor 
+              v-model="markdownContent"
+              :useExecCommandOnly="useExecCommandOnly"
+              :debug="debugMode"/>
           </div>
           <div class="textarea-pane">
             <div class="textarea-header">Raw Markdown</div>
@@ -65,7 +76,9 @@ Start typing to see the magic happen!
 console.log("Hello World!");
 \`\`\``,
       viewMode: 'editor',
-      md: null
+      md: null,
+      useExecCommandOnly: true,
+      debugMode: false
     }
   },
   computed: {
@@ -181,6 +194,18 @@ body {
 .copy-btn:hover {
   background: #f6f8fa;
   border-color: #d0d7de;
+}
+
+.feature-toggle {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 14px;
+  color: #24292e;
+}
+
+.feature-toggle input[type="checkbox"] {
+  cursor: pointer;
 }
 
 .editor-wrapper {
