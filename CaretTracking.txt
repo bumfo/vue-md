@@ -811,25 +811,25 @@
 
 ⏺ Update(src/utils/MarkdownBlockEditor.js)
   ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
-       727        const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
-       728        
-       729        if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
-       730 -        // Direct merge with paragraph/heading at same level
-       730 +        // Markdown semantic rule: When merging with different block types, convert to paragraph
-       731 +        const currentType = this.getBlockType(blockElement)
-       732 +        const shouldConvertToParagraph = previousType === 'heading' || currentType === 'heading'
-       733 +        
-       734          const cursorPosition = previousElement.textContent.length
-       735          const currentContent = this.extractInlineContent(blockElement)
-       736          
-       737 +        if (shouldConvertToParagraph && previousType === 'heading') {
-       738 +          // Convert heading to paragraph before merge
-       739 +          this.convertBlockToParagraph(previousElement)
-       740 +        }
-       741 +        
-       742          // Position cursor at end of previous element
-       743          const range = document.createRange()
-       744          const selection = window.getSelection()
+       715        const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
+       716        
+       717        if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
+       718 -        // Direct merge with paragraph/heading at same level
+       718 +        // Markdown semantic rule: When merging with different block types, convert to paragraph
+       719 +        const currentType = this.getBlockType(blockElement)
+       720 +        const shouldConvertToParagraph = previousType === 'heading' || currentType === 'heading'
+       721 +        
+       722          const cursorPosition = previousElement.textContent.length
+       723          const currentContent = this.extractInlineContent(blockElement)
+       724          
+       725 +        if (shouldConvertToParagraph && previousType === 'heading') {
+       726 +          // Convert heading to paragraph before merge
+       727 +          this.convertBlockToParagraph(previousElement)
+       728 +        }
+       729 +        
+       730          // Position cursor at end of previous element
+       731          const range = document.createRange()
+       732          const selection = window.getSelection()
 
 > I'm merging h2 with h1, however it merges with the following p instead, and caret position jumps to end of h2, before p
 
@@ -931,91 +931,91 @@
 
 ⏺ Update(src/utils/MarkdownBlockEditor.js)
   ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
-       1172        }
-       1173        return true
-       1174      }
-       1175 +  
-       1176 +    // ========== MAIN EVENT HANDLERS ==========
-       1177 +    
-       1178 +    handleBackspace() {
-       1179 +      this.log('handleBackspace')
-       1180 +      
-       1181 +      const selection = window.getSelection()
-       1182 +      if (!selection.rangeCount) return false
-       1183 +      
-       1184 +      const range = selection.getRangeAt(0)
-       1185 +      
-       1186 +      // If there's a selection (not collapsed), let browser handle
-       1187 +      if (!range.collapsed) {
-       1188 +        this.log('handleBackspace: selection not collapsed, let browser handle')
-       1189 +        return false
-       1190 +      }
-       1191 +      
-       1192 +      // Check if cursor is at block start
-       1193 +      const blockStartInfo = this.isAtBlockStart(range.startContainer, range.startOffset)
-       1194 +      if (!blockStartInfo.atStart) {
-       1195 +        this.log('handleBackspace: not at block start')
-       1196 +        return false
-       1197 +      }
-       1198 +      
-       1199 +      const blockElement = blockStartInfo.blockElement
-       1200 +      this.log('handleBackspace: at start of block', blockElement.tagName)
+       1160        }
+       1161        return true
+       1162      }
+       1163 +  
+       1164 +    // ========== MAIN EVENT HANDLERS ==========
+       1165 +    
+       1166 +    handleBackspace() {
+       1167 +      this.log('handleBackspace')
+       1168 +      
+       1169 +      const selection = window.getSelection()
+       1170 +      if (!selection.rangeCount) return false
+       1171 +      
+       1172 +      const range = selection.getRangeAt(0)
+       1173 +      
+       1174 +      // If there's a selection (not collapsed), let browser handle
+       1175 +      if (!range.collapsed) {
+       1176 +        this.log('handleBackspace: selection not collapsed, let browser handle')
+       1177 +        return false
+       1178 +      }
+       1179 +      
+       1180 +      // Check if cursor is at block start
+       1181 +      const blockStartInfo = this.isAtBlockStart(range.startContainer, range.startOffset)
+       1182 +      if (!blockStartInfo.atStart) {
+       1183 +        this.log('handleBackspace: not at block start')
+       1184 +        return false
+       1185 +      }
+       1186 +      
+       1187 +      const blockElement = blockStartInfo.blockElement
+       1188 +      this.log('handleBackspace: at start of block', blockElement.tagName)
+       1189 +      
+       1190 +      // Apply markdown semantic backspace behavior
+       1191 +      return this.handleBlockBackspace(blockElement)
+       1192 +    }
+       1193 +    
+       1194 +    handleEnter() {
+       1195 +      this.log('handleEnter')
+       1196 +      
+       1197 +      const context = this.getCursorContext()
+       1198 +      if (!context) return false
+       1199 +      
+       1200 +      const container = context.range.commonAncestorContainer
        1201 +      
-       1202 +      // Apply markdown semantic backspace behavior
-       1203 +      return this.handleBlockBackspace(blockElement)
-       1204 +    }
-       1205 +    
-       1206 +    handleEnter() {
-       1207 +      this.log('handleEnter')
-       1208 +      
-       1209 +      const context = this.getCursorContext()
-       1210 +      if (!context) return false
-       1211 +      
-       1212 +      const container = context.range.commonAncestorContainer
+       1202 +      // Priority 1: Check if we're in an empty block
+       1203 +      const emptyBlock = this.findEmptyBlock(container)
+       1204 +      if (emptyBlock) {
+       1205 +        return this.handleEmptyBlockEnter(emptyBlock)
+       1206 +      }
+       1207 +      
+       1208 +      // Priority 2: End of inline element
+       1209 +      if (this.isAtEndOfInlineElement()) {
+       1210 +        this.log('At end of inline element')
+       1211 +        return this.insertHTML('<p><br></p>')
+       1212 +      }
        1213 +      
-       1214 +      // Priority 1: Check if we're in an empty block
-       1215 +      const emptyBlock = this.findEmptyBlock(container)
-       1216 +      if (emptyBlock) {
-       1217 +        return this.handleEmptyBlockEnter(emptyBlock)
+       1214 +      // Priority 3: Non-empty block in container at end
+       1215 +      const blockInfo = this.getBlockInfo(container)
+       1216 +      if (blockInfo && blockInfo.block && this.isAtEndOfElement(blockInfo.block)) {
+       1217 +        return this.handleNonEmptyBlockEnter(blockInfo, context.range)
        1218 +      }
        1219 +      
-       1220 +      // Priority 2: End of inline element
-       1221 +      if (this.isAtEndOfInlineElement()) {
-       1222 +        this.log('At end of inline element')
-       1223 +        return this.insertHTML('<p><br></p>')
-       1224 +      }
-       1225 +      
-       1226 +      // Priority 3: Non-empty block in container at end
-       1227 +      const blockInfo = this.getBlockInfo(container)
-       1228 +      if (blockInfo && blockInfo.block && this.isAtEndOfElement(blockInfo.block)) {
-       1229 +        return this.handleNonEmptyBlockEnter(blockInfo, context.range)
-       1230 +      }
-       1231 +      
-       1232 +      // Let browser handle normal enter
-       1233 +      return false
-       1234 +    }
-       1235 +    
-       1236 +    handleBlockBackspace(blockElement) {
-       1237 +      const blockType = this.getBlockType(blockElement)
-       1238 +      const container = blockElement.parentElement
-       1239 +      const isInContainer = this.isContainerElement(container)
-       1240 +      
-       1241 +      this.log('Block context', { blockType, isInContainer })
-       1242 +      
-       1243 +      // Handle based on context - following markdown semantic rules
-       1244 +      if (isInContainer) {
-       1245 +        // Exit container
-       1246 +        return this.exitContainer(blockElement, container)
-       1247 +      } else if (blockType === 'paragraph') {
-       1248 +        // Try to merge with previous
-       1249 +        return this.mergeWithPrevious(blockElement)
-       1250 +      } else {
-       1251 +        // Reset styled block to paragraph and try to merge
-       1252 +        return this.resetBlockToParagraph(blockElement)
-       1253 +      }
-       1254 +    }
-       1255    }
-       1256   \ No newline at end of file
+       1220 +      // Let browser handle normal enter
+       1221 +      return false
+       1222 +    }
+       1223 +    
+       1224 +    handleBlockBackspace(blockElement) {
+       1225 +      const blockType = this.getBlockType(blockElement)
+       1226 +      const container = blockElement.parentElement
+       1227 +      const isInContainer = this.isContainerElement(container)
+       1228 +      
+       1229 +      this.log('Block context', { blockType, isInContainer })
+       1230 +      
+       1231 +      // Handle based on context - following markdown semantic rules
+       1232 +      if (isInContainer) {
+       1233 +        // Exit container
+       1234 +        return this.exitContainer(blockElement, container)
+       1235 +      } else if (blockType === 'paragraph') {
+       1236 +        // Try to merge with previous
+       1237 +        return this.mergeWithPrevious(blockElement)
+       1238 +      } else {
+       1239 +        // Reset styled block to paragraph and try to merge
+       1240 +        return this.resetBlockToParagraph(blockElement)
+       1241 +      }
+       1242 +    }
+       1243    }
+       1244   \ No newline at end of file
 
 > handleBackspace() { // line number 973
 
@@ -1410,4 +1410,432 @@
   - Whether the execCommand path is used
 
   This will help pinpoint if the issue is in block detection, method routing, or cursor positioning after the operations.
+
+> /export CaretTracking.txt
+  ⎿  Conversation exported to: CaretTracking.txt
+
+> No the behavior doesn't change after your fix. Let's debug intermediate results together
+
+⏺ You're right, let's debug this step by step together. The logging I added should help us see exactly what's happening.
+
+  When you test h1, |h2, p3 + backspace with the execCommand path, can you share what the debug logs show? Specifically:
+
+  1. From handleBackspace(): What does it log for:
+    - blockElement (should be "H2")
+    - blockType (should be "heading")
+    - useExecCommandOnly (should be true)
+    - Which method it calls ("Calling resetBlockToParagraph for H2")
+  2. From resetBlockToParagraph(): What does it log for:
+    - element (should be "H2")
+    - useExecCommandOnly (should be true)
+  3. What's the actual result vs expected:
+    - Expected: h1, |p2, p3 (h2 converted to p, cursor at start of new paragraph)
+    - Actual: What do you see?
+
+  This will help us identify where exactly the execCommand path diverges from the expected behavior. The issue might be:
+
+  - Block detection is wrong (identifying wrong element)
+  - Method routing is wrong (calling wrong method)
+  - execCommand operations aren't working as expected
+  - Cursor positioning calculation is still off
+
+  Can you run the test and share what the console logs show?
+
+> Expected: h1, |h2, p3 -> h1, |p2, p3 however I got h1, h2|+p3 (h1, h2 here means first and second heading element), log: [MarkdownBlockEditor] 
+  handleBackspace
+  MarkdownBlockEditor.js?t=1754550126755:18 [MarkdownBlockEditor] Block context {blockElement: 'H1', blockType: 'heading', isInContainer: false, 
+  useExecCommandOnly: true}
+  MarkdownBlockEditor.js?t=1754550126755:18 [MarkdownBlockEditor] Calling resetBlockToParagraph for H1
+  MarkdownBlockEditor.js?t=1754550126755:18 [MarkdownBlockEditor] resetBlockToParagraph {element: 'H1', useExecCommandOnly: true}
+
+⏺ Perfect! Now I see the exact problem. The logs reveal two critical issues:
+
+  1. Wrong block detection: The cursor is at the start of H2, but isAtBlockStart() is detecting H1 as the blockElement instead of H2
+  2. Wrong operation: Because it detected H1, it's calling resetBlockToParagraph(H1) instead of resetBlockToParagraph(H2)
+
+  This explains why you get h1, h2|+p3 - it's converting H1 to paragraph and somehow merging with H2, when it should be converting H2 to paragraph.
+
+  The issue is in the isAtBlockStart() method. Let me examine how it finds the block element:
+
+⏺ Read(src/utils/MarkdownBlockEditor.js)
+  ⎿  Read 15 lines (ctrl+r to expand)
+
+⏺ The problem is that isAtBlockStart() walks up the DOM tree and returns the first block element it finds. But if the cursor is between H1 and H2, the
+  container might be a text node or element that's not directly inside H2.
+
+  Let me add more detailed logging to understand exactly where the cursor is positioned:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
+       172      // ========== POSITION CHECKING ==========
+       173      
+       174      isAtBlockStart(container, offset) {
+       175 +      this.log('isAtBlockStart', {
+       176 +        containerType: container.nodeType === Node.TEXT_NODE ? 'TEXT_NODE' : 'ELEMENT_NODE',
+       177 +        containerTag: container.tagName || 'N/A',
+       178 +        offset: offset
+       179 +      })
+       180 +      
+       181        if (offset !== 0) return { atStart: false }
+       182    
+       183        let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
+       184 +      this.log('isAtBlockStart searching from', element.tagName)
+       185    
+       186        while (element && element !== this.editor) {
+       187 +        this.log('isAtBlockStart checking', element.tagName, 'isBlock:', this.isBlockElement(element))
+       188          if (this.isBlockElement(element)) {
+       189            const textBefore = this.getTextBeforeCursor(element, container, offset)
+       190 +          this.log('isAtBlockStart found block', element.tagName, 'textBefore:', textBefore)
+       191            return {
+       192              atStart: textBefore === '',
+       193              blockElement: element
+
+> Let me clarify this further: Expected: h1-1, |h1-2, p3 -> h1-1, |p2, p3 however I got h1-1, h1-2|+p3
+
+⏺ Ah, now I understand! You have:
+
+  - h1-1 (first H1 element)
+  - |h1-2 (cursor at start of second H1 element)
+  - p3 (paragraph)
+
+  Expected: h1-1, |p2, p3 (second H1 converts to paragraph, cursor at start)
+  Actual: h1-1, h1-2|+p3 (wrong merge happening)
+
+  But the logs show it's detecting the first H1 (blockElement: 'H1') when the cursor should be at the start of the second H1. This means
+  isAtBlockStart() is finding the wrong block element.
+
+  The cursor positioning after previous execCommand operations must be corrupted, causing the cursor to actually be positioned between the two H1
+  elements or in some unexpected location, making isAtBlockStart() walk up and find the first H1 instead of the second H1.
+
+  This is exactly the kind of cursor positioning corruption that happens with execCommand - after previous operations, the cursor ends up in unexpected
+  DOM positions.
+
+  Can you add this simple logging to see exactly where the cursor thinks it is:
+
+  // In handleBackspace(), right after getCursorContext()
+  this.log('Cursor position:', {
+    startContainer: context.container.tagName || context.container.nodeType,
+    startOffset: context.offset,
+    actualText: context.container.textContent?.substring(0, 20) || 'N/A'
+  })
+
+  This will show us where the browser thinks the cursor is positioned, which will explain why isAtBlockStart() is finding the wrong block.
+
+> I think it detects the second H1
+
+⏺ You're right! If it detects the second H1 correctly, then the issue isn't block detection. Let me re-read the logs more carefully:
+
+  Logs show:
+  - blockElement: 'H1' - This is the second H1 (correctly detected)
+  - Calling resetBlockToParagraph for H1 - Correctly calling the right method
+  - resetBlockToParagraph {element: 'H1', useExecCommandOnly: true} - Method is executing
+
+  But the result is wrong: h1-1, h1-2|+p3 instead of h1-1, |p2, p3
+
+  This means:
+  1. ✅ Block detection is correct (second H1)
+  2. ✅ Method routing is correct (resetBlockToParagraph)
+  3. ❌ The resetBlockToParagraph execCommand operations are doing something wrong
+
+  The issue must be inside the resetBlockToParagraph method's execCommand path. Looking at the result h1-1, h1-2|+p3, it seems like:
+
+  1. The second H1 is NOT being converted to paragraph (still shows as H1)
+  2. The cursor ends up at the end of the second H1 instead of the start
+  3. Somehow p3 gets merged with the H1
+
+  Let me add logging inside the execCommand operations to see what's actually happening:
+
+  // Add this inside resetBlockToParagraph, right before this.deleteSelection()
+  this.log('About to delete H1, beforePosition:', beforePosition)
+
+  // Add this right after this.insertHTML(p.outerHTML) 
+  this.log('After insertHTML, cursor should be at:', beforePosition)
+
+  This will help us see if the execCommand operations (delete + insertHTML) are working as expected, or if something is going wrong during those
+  operations.
+
+> Please add the log
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 2 additions                                            
+       483          selection.addRange(range)
+       484          
+       485          // Delete the selected block - this leaves cursor at the deletion point
+       486 +        this.log('About to delete H1, beforePosition:', beforePosition)
+       487          this.deleteSelection()
+       488          
+       489          // Insert the new paragraph at the current cursor position
+       490          this.insertHTML(p.outerHTML)
+       491 +        this.log('After insertHTML, cursor should be at:', beforePosition)
+       492          
+       493          // Position cursor at the start of the inserted paragraph content
+       494          // The paragraph was inserted at beforePosition, so cursor should be at beforePosition
+
+⏺ Perfect! Now when you test h1-1, |h1-2, p3 + backspace, the logs should show us exactly what's happening during the execCommand operations. Please run
+   the test and share what these additional logs show:
+
+  1. About to delete H1, beforePosition: [number]
+  2. After insertHTML, cursor should be at: [number]
+
+  This will tell us if:
+  - The beforePosition calculation is correct
+  - Whether the delete and insertHTML operations are working as expected
+  - Whether the issue is in the final cursor positioning
+
+> I think the first deletion only removes content of h1, not the element, and the second insert tries to insert p into h1, causing the weird style, this
+   matches with the behavior. The caret tracking should be able to distinguish h1-1|, h1-2 and h1-1, |h1-2 (may be count block boundary and br both as 
+  \n?)
+
+⏺ Excellent analysis! You've identified the core issues:
+
+  Problem 1: deleteSelection() only removes content, not the element
+
+  When range.selectNode(h1) and deleteSelection() is called, it only removes the text content of the H1, leaving an empty <h1></h1> element instead of
+  removing the entire element.
+
+  Problem 2: insertHTML(p.outerHTML) inserts paragraph inside the H1
+
+  Since the H1 element still exists (just empty), insertHTML() inserts the paragraph inside the H1, creating invalid nested structure like
+  <h1><p>content</p></h1>, which causes the weird styling.
+
+  Problem 3: Caret tracking doesn't distinguish block boundaries
+
+  You're right about needing to distinguish:
+  - h1-1|, h1-2 (cursor at end of first H1)
+  - h1-1, |h1-2 (cursor at start of second H1)
+
+  The absolute position counting should treat block boundaries as meaningful positions, possibly counting them as \n characters.
+
+  Let me fix the deleteSelection() issue first by using a different approach. Instead of relying on deleteSelection() to remove the whole element, we
+  should use insertHTML('') to replace the selected element with nothing:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  (No changes)
+
+> I think the root problem is that your selection is <h1>[xxx]</h1> instead of [<h1>xxx</h1>]
+
+⏺ Exactly! That's the root cause. The selection is:
+
+  Current (wrong): <h1>[xxx]</h1> - selects content inside the H1
+  Should be: [<h1>xxx</h1>] - selects the entire H1 element including tags
+
+  This is why deleteSelection() only removes the content, leaving an empty <h1></h1> shell.
+
+  The issue is in how range.selectNode(blockElement) works. Let me check if this is the problem and fix it:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  (No changes)
+
+> I created a simple PoC html: <!doctype html>
+  <div contenteditable style="padding: 10px" id="editor">
+  <h1>Heading1-1</h1>
+  <h1 id="h1-2">Heading1-2</h1>
+  <p>paragraph</p>
+  </div>
+
+  <button id="sel">Select</button>
+  <button id="del">Delete</button>
+
+  <script>
+  function preventDefault(e) {
+      e.preventDefault()
+  }
+
+  function executeCommand(command, value = null) {
+    return document.execCommand(command, false, value)
+  }
+
+  let editor = document.querySelector('#editor')
+  let sel = document.querySelector('#sel')
+  sel.addEventListener('mousedown', preventDefault)
+  sel.addEventListener('focus', preventDefault)
+
+  let del = document.querySelector('#del')
+  del.addEventListener('mousedown', preventDefault)
+  del.addEventListener('focus', preventDefault)
+
+  sel.addEventListener('click', function() {
+      let h12 = editor.querySelector('#h1-2')
+      let selection = window.getSelection()
+      let range = document.createRange()
+      range.selectNode(h12)
+
+      console.log(range)
+
+      selection.removeAllRanges()
+    selection.addRange(range)
+  }, {capture:true})
+
+  del.addEventListener('click', function() {
+    executeCommand('insertHTML', '<p></p>')
+  }, {capture:true})
+
+
+
+  </script>
+  . I got the problem now. If I delete when [<h1>xxx</h1>]<p>yyy</p>, the browser automatically creates <h1>yyy</h1>, which is the root cause of the 
+  problem. I think executeCommand('formatBlock', 'p') is the correct command to convert h1 to p.
+
+⏺ Brilliant discovery! You've found the exact root cause. When you have [<h1>xxx</h1>]<p>yyy</p> and use insertHTML('<p></p>'), the browser's
+  contenteditable logic automatically "heals" the structure by converting the following paragraph to match the heading format, resulting in
+  <h1>yyy</h1>.
+
+  And you're absolutely right about the solution: execCommand('formatBlock', 'p') is the correct command to convert a heading to paragraph while
+  preserving the content and avoiding this auto-healing behavior.
+
+  Let me fix the resetBlockToParagraph method:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 7 additions and 21 removals                            
+       470        p.innerHTML = blockElement.innerHTML || '<br>'
+       471        
+       472        if (this.useExecCommandOnly) {
+       473 -        // Store the position where the new paragraph should start
+       474 -        const beforePosition = this.getAbsolutePositionBefore(blockElement)
+       473 +        // Position cursor at start of the block to convert
+       474 +        this.setCursorAtStart(blockElement)
+       475          
+       476 -        // Strategy: Select the block, delete it, then insert new paragraph at that position
+       477 -        const range = document.createRange()
+       478 -        const selection = window.getSelection()
+       476 +        // Use formatBlock to convert heading to paragraph - this preserves content
+       477 +        // and avoids the browser's auto-healing behavior that converts following elements
+       478 +        this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
+       479 +        this.executeCommand('formatBlock', 'p')
+       480          
+       481 -        // Select the entire block element
+       482 -        range.selectNode(blockElement)
+       483 -        selection.removeAllRanges()
+       484 -        selection.addRange(range)
+       485 -        
+       486 -        // Delete the selected block - this leaves cursor at the deletion point
+       487 -        this.log('About to delete H1, beforePosition:', beforePosition)
+       488 -        this.deleteSelection()
+       489 -        
+       490 -        // Insert the new paragraph at the current cursor position
+       491 -        this.insertHTML(p.outerHTML)
+       492 -        this.log('After insertHTML, cursor should be at:', beforePosition)
+       493 -        
+       494 -        // Position cursor at the start of the inserted paragraph content
+       495 -        // The paragraph was inserted at beforePosition, so cursor should be at beforePosition
+       496 -        this.setAbsoluteCaretPosition(beforePosition)
+       481 +        // Cursor should already be positioned correctly at start of converted paragraph
+       482        } else {
+       483          // Direct DOM manipulation
+       484          blockElement.parentNode.replaceChild(p, blockElement)
+
+⏺ Perfect! This should fix the core issue. Now the execCommand path will:
+
+  1. Position cursor at start of the H1 element
+  2. Use formatBlock('p') to convert H1 → P in-place
+  3. Preserve the content without affecting other elements
+  4. Avoid the browser's auto-healing that was converting the following paragraph to H1
+
+  This approach is much cleaner and aligns with how contenteditable is supposed to work. The formatBlock command is specifically designed for this kind
+  of block-level formatting conversion.
+
+  Test this with your h1-1, |h1-2, p3 scenario - it should now correctly convert to h1-1, |p2, p3 without the weird merging behavior.
+
+> use formatBlock where possible in the execCommand path, such as double enter
+
+⏺ Excellent idea! Using formatBlock is the proper way to handle block-level operations with execCommand. Let me audit the codebase and replace
+  inappropriate uses of insertHTML with formatBlock where applicable.
+
+⏺ Bash(grep -n "insertHTML.*<.*>" src/utils/MarkdownBlockEditor.js)
+  ⎿  647:      this.insertHTML('<p><br></p>')                             
+     1021:      return this.insertHTML('<p><br></p>')
+     1126:        this.insertHTML(`<${newBlockTag}><br></${newBlockTag}>`)
+
+⏺ Found the key places where we should use formatBlock instead:
+
+  1. Line 647: splitContainer method
+  2. Line 1021: handleEnter method
+  3. Line 1126: handleNonEmptyBlockEnter method
+
+  Let me check these contexts and fix them:
+
+⏺ Read(src/utils/MarkdownBlockEditor.js)
+  ⎿  Read 5 lines (ctrl+r to expand)
+
+⏺ Read(src/utils/MarkdownBlockEditor.js)
+  ⎿  Read 5 lines (ctrl+r to expand)
+
+⏺ Read(src/utils/MarkdownBlockEditor.js)
+  ⎿  Read 5 lines (ctrl+r to expand)
+
+⏺ Perfect! Let me fix these three cases:
+
+  1. Fix handleEnter - creating new paragraph
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
+       1018        // Priority 2: End of inline element
+       1019        if (this.isAtEndOfInlineElement()) {
+       1020          this.log('At end of inline element')
+       1021 -        return this.insertHTML('<p><br></p>')
+       1021 +        if (this.useExecCommandOnly) {
+       1022 +          // Use formatBlock to ensure proper paragraph creation
+       1023 +          return this.executeCommand('formatBlock', 'p')
+       1024 +        } else {
+       1025 +          return this.insertHTML('<p><br></p>')
+       1026 +        }
+       1027        }
+       1028        
+       1029        // Priority 3: Non-empty block in container at end
+
+> formatBlock replaces the enclosing element with the specified element (p in this case), is it the expected behavior?
+
+⏺ You're absolutely right to question this! formatBlock replaces the current block element with the specified element, which is not always what we want.
+
+  Let me clarify the different use cases:
+
+  When formatBlock is correct:
+
+  - Converting block types: h1 → p, h2 → p, blockquote → p
+  - This is exactly what we want in resetBlockToParagraph() ✅
+
+  When formatBlock is wrong:
+
+  - Creating new blocks: At end of inline element, we want to insert a new paragraph, not replace the current block
+  - Double enter scenarios: We want to insert new elements, not convert existing ones
+  - Container splitting: We want to insert paragraphs between containers
+
+  For these cases, we still need insertHTML or better alternatives like:
+  - insertParagraph command (if supported)
+  - insertLineBreak followed by block creation
+  - Proper selection positioning + insertHTML
+
+  So the current fix for resetBlockToParagraph() using formatBlock is correct, but for the other cases (handleEnter, splitContainer, etc.), we should
+  keep insertHTML or find better alternatives.
+
+  Should I revert the formatBlock suggestion for the insertion cases and only use it for block conversion cases?
+
+> when I press enter on a empty styled block, does it suitable to formatBlock?
+
+⏺ Excellent question! Yes, when you press enter on an empty styled block (like empty H1, H2, blockquote), using formatBlock('p') is perfect because:
+
+  For empty styled blocks:
+
+  - Current: <h1><br></h1> or <h2></h2>
+  - Expected behavior: Convert to <p><br></p> (reset styling)
+  - formatBlock('p'): ✅ Perfect - replaces the empty styled block with paragraph
+
+  This matches markdown semantics:
+
+  - Empty heading + Enter = becomes paragraph
+  - Empty blockquote + Enter = becomes paragraph
+  - Empty list item + Enter = exits list (handled separately)
+
+  The key distinction:
+
+  - Empty styled block + Enter → formatBlock('p') ✅ (convert)
+  - Non-empty block + Enter → insertHTML('<p><br></p>') ✅ (insert new)
+  - End of inline element + Enter → insertHTML('<p><br></p>') ✅ (insert new)
+
+  So in your codebase, the empty block handling should use formatBlock('p'). Let me check where empty block enter is handled:
+
+  Looking at the flow: handleEnter() → handleEmptyBlockEnter() → either exitContainer() or resetBlockToParagraph()
+
+  Since resetBlockToParagraph() now uses formatBlock('p'), empty styled blocks should already work correctly! The formatBlock approach is ideal for this
+   case.
 
