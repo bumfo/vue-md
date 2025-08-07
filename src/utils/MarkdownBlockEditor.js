@@ -19,6 +19,61 @@ export default class MarkdownBlockEditor {
     }
   }
 
+  /**
+   * Debug helper to visualize selection boundaries in HTML
+   */
+  debugSelection(description = 'Selection') {
+    if (!this.debug) return
+    
+    const selection = window.getSelection()
+    if (selection.rangeCount === 0) {
+      this.log(description + ': No selection')
+      return
+    }
+    
+    const range = selection.getRangeAt(0)
+    const startContainer = range.startContainer
+    const endContainer = range.endContainer
+    
+    // Get the HTML representation around the selection
+    let html = this.editor.innerHTML
+    
+    // Insert markers to show selection boundaries
+    // We'll work backwards to avoid offset changes
+    const endOffset = this.getAbsoluteOffset(endContainer, range.endOffset)
+    const startOffset = this.getAbsoluteOffset(startContainer, range.startOffset)
+    
+    if (endOffset >= 0 && startOffset >= 0) {
+      html = html.slice(0, endOffset) + ']' + html.slice(endOffset)
+      html = html.slice(0, startOffset) + '[' + html.slice(startOffset)
+      this.log(description + ':', html)
+    } else {
+      this.log(description + ': Could not determine offsets')
+    }
+  }
+  
+  /**
+   * Get absolute character offset in editor innerHTML
+   */
+  getAbsoluteOffset(container, offset) {
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    )
+    
+    let currentPos = 0
+    let node
+    while (node = walker.nextNode()) {
+      if (node === container) {
+        return currentPos + offset
+      }
+      currentPos += node.textContent.length
+    }
+    return -1
+  }
+
   // ========== ELEMENT TYPE CHECKING ==========
   
   isBlockElement(element) {
@@ -1039,6 +1094,9 @@ export default class MarkdownBlockEditor {
           
           selection.removeAllRanges()
           selection.addRange(range)
+          
+          // Debug: show the actual selection boundaries
+          this.debugSelection('Container merge selection')
           
           // Delete the selection (removes empty paragraph and merges containers)
           this.executeCommand('delete')
