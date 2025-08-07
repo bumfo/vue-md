@@ -779,6 +779,36 @@ export default class MarkdownBlockEditor {
     // Check if this is cross-container merging (root element into container)
     const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
 
+    if (this.useExecCommandOnly && !isCrossContainerMerge) {
+      this.log('Using execCommand with clean HTML merge')
+      
+      // Extract clean content from current block
+      const cleanContent = this.extractInlineContent(blockElement)
+      const cursorPosition = previousElement.textContent.length
+      
+      // Position cursor at end of previous element
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStart(previousElement, previousElement.childNodes.length)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      
+      // Insert clean content using execCommand
+      this.executeCommand('insertHTML', cleanContent)
+      
+      // Remove the current block
+      range.selectNode(blockElement)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      this.executeCommand('delete')
+      
+      // Fix cursor position to the merge boundary
+      this.setCursorPosition(previousElement, cursorPosition)
+      
+      return true
+    }
+
     if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
       // Direct merge with paragraph/heading at same level
       const cursorPosition = previousElement.textContent.length
