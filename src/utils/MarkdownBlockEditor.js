@@ -483,40 +483,16 @@ export default class MarkdownBlockEditor {
    * Handles special cases like LI that create nested structures
    */
   convertBlockToParagraphWithFormatBlock(blockElement) {
-    this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
+    this.log('Converting', blockElement.tagName, 'to paragraph using outdent + formatBlock')
     
     // Position cursor at start of the block to convert
     this.setCursorAtStart(blockElement)
     
-    // Use formatBlock to convert to paragraph
+    // Universal approach: outdent first (removes containers), then formatBlock to ensure paragraph
+    this.executeCommand('outdent')
     this.executeCommand('formatBlock', 'p')
     
-    // Clean up any nested structures that formatBlock might create
-    const selection = window.getSelection()
-    if (selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0)
-      let currentP = range.startContainer
-      
-      // Find the paragraph element
-      while (currentP && currentP !== this.editor) {
-        if (currentP.nodeType === Node.ELEMENT_NODE && currentP.tagName === 'P') {
-          // Remove any nested block elements (ul, ol, li, h1-h6, blockquote, etc.)
-          const nestedBlocks = currentP.querySelectorAll('ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote, pre')
-          nestedBlocks.forEach(element => element.remove())
-          
-          // Ensure paragraph has content
-          if (currentP.innerHTML.trim() === '') {
-            currentP.innerHTML = '<br>'
-          }
-          
-          // Position cursor at start of cleaned paragraph
-          this.setCursorAtStart(currentP)
-          break
-        }
-        currentP = currentP.parentElement
-      }
-    }
-    
+    // No manual cleanup needed - outdent creates clean structure
     return true
   }
 

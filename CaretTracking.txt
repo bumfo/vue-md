@@ -811,25 +811,25 @@
 
 ⏺ Update(src/utils/MarkdownBlockEditor.js)
   ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
-       747        const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
-       748        
-       749        if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
-       750 -        // Direct merge with paragraph/heading at same level
-       750 +        // Markdown semantic rule: When merging with different block types, convert to paragraph
-       751 +        const currentType = this.getBlockType(blockElement)
-       752 +        const shouldConvertToParagraph = previousType === 'heading' || currentType === 'heading'
-       753 +        
-       754          const cursorPosition = previousElement.textContent.length
-       755          const currentContent = this.extractInlineContent(blockElement)
-       756          
-       757 +        if (shouldConvertToParagraph && previousType === 'heading') {
-       758 +          // Convert heading to paragraph before merge
-       759 +          this.convertBlockToParagraph(previousElement)
-       760 +        }
-       761 +        
-       762          // Position cursor at end of previous element
-       763          const range = document.createRange()
-       764          const selection = window.getSelection()
+       723        const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
+       724        
+       725        if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
+       726 -        // Direct merge with paragraph/heading at same level
+       726 +        // Markdown semantic rule: When merging with different block types, convert to paragraph
+       727 +        const currentType = this.getBlockType(blockElement)
+       728 +        const shouldConvertToParagraph = previousType === 'heading' || currentType === 'heading'
+       729 +        
+       730          const cursorPosition = previousElement.textContent.length
+       731          const currentContent = this.extractInlineContent(blockElement)
+       732          
+       733 +        if (shouldConvertToParagraph && previousType === 'heading') {
+       734 +          // Convert heading to paragraph before merge
+       735 +          this.convertBlockToParagraph(previousElement)
+       736 +        }
+       737 +        
+       738          // Position cursor at end of previous element
+       739          const range = document.createRange()
+       740          const selection = window.getSelection()
 
 > I'm merging h2 with h1, however it merges with the following p instead, and caret position jumps to end of h2, before p
 
@@ -931,91 +931,91 @@
 
 ⏺ Update(src/utils/MarkdownBlockEditor.js)
   ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
-       1204        }
-       1205        return true
-       1206      }
-       1207 +  
-       1208 +    // ========== MAIN EVENT HANDLERS ==========
-       1209 +    
-       1210 +    handleBackspace() {
-       1211 +      this.log('handleBackspace')
-       1212 +      
-       1213 +      const selection = window.getSelection()
-       1214 +      if (!selection.rangeCount) return false
-       1215 +      
-       1216 +      const range = selection.getRangeAt(0)
+       1191        }
+       1192        return true
+       1193      }
+       1194 +  
+       1195 +    // ========== MAIN EVENT HANDLERS ==========
+       1196 +    
+       1197 +    handleBackspace() {
+       1198 +      this.log('handleBackspace')
+       1199 +      
+       1200 +      const selection = window.getSelection()
+       1201 +      if (!selection.rangeCount) return false
+       1202 +      
+       1203 +      const range = selection.getRangeAt(0)
+       1204 +      
+       1205 +      // If there's a selection (not collapsed), let browser handle
+       1206 +      if (!range.collapsed) {
+       1207 +        this.log('handleBackspace: selection not collapsed, let browser handle')
+       1208 +        return false
+       1209 +      }
+       1210 +      
+       1211 +      // Check if cursor is at block start
+       1212 +      const blockStartInfo = this.isAtBlockStart(range.startContainer, range.startOffset)
+       1213 +      if (!blockStartInfo.atStart) {
+       1214 +        this.log('handleBackspace: not at block start')
+       1215 +        return false
+       1216 +      }
        1217 +      
-       1218 +      // If there's a selection (not collapsed), let browser handle
-       1219 +      if (!range.collapsed) {
-       1220 +        this.log('handleBackspace: selection not collapsed, let browser handle')
-       1221 +        return false
-       1222 +      }
-       1223 +      
-       1224 +      // Check if cursor is at block start
-       1225 +      const blockStartInfo = this.isAtBlockStart(range.startContainer, range.startOffset)
-       1226 +      if (!blockStartInfo.atStart) {
-       1227 +        this.log('handleBackspace: not at block start')
-       1228 +        return false
-       1229 +      }
+       1218 +      const blockElement = blockStartInfo.blockElement
+       1219 +      this.log('handleBackspace: at start of block', blockElement.tagName)
+       1220 +      
+       1221 +      // Apply markdown semantic backspace behavior
+       1222 +      return this.handleBlockBackspace(blockElement)
+       1223 +    }
+       1224 +    
+       1225 +    handleEnter() {
+       1226 +      this.log('handleEnter')
+       1227 +      
+       1228 +      const context = this.getCursorContext()
+       1229 +      if (!context) return false
        1230 +      
-       1231 +      const blockElement = blockStartInfo.blockElement
-       1232 +      this.log('handleBackspace: at start of block', blockElement.tagName)
-       1233 +      
-       1234 +      // Apply markdown semantic backspace behavior
-       1235 +      return this.handleBlockBackspace(blockElement)
-       1236 +    }
-       1237 +    
-       1238 +    handleEnter() {
-       1239 +      this.log('handleEnter')
-       1240 +      
-       1241 +      const context = this.getCursorContext()
-       1242 +      if (!context) return false
-       1243 +      
-       1244 +      const container = context.range.commonAncestorContainer
-       1245 +      
-       1246 +      // Priority 1: Check if we're in an empty block
-       1247 +      const emptyBlock = this.findEmptyBlock(container)
-       1248 +      if (emptyBlock) {
-       1249 +        return this.handleEmptyBlockEnter(emptyBlock)
-       1250 +      }
-       1251 +      
-       1252 +      // Priority 2: End of inline element
-       1253 +      if (this.isAtEndOfInlineElement()) {
-       1254 +        this.log('At end of inline element')
-       1255 +        return this.insertHTML('<p><br></p>')
-       1256 +      }
-       1257 +      
-       1258 +      // Priority 3: Non-empty block in container at end
-       1259 +      const blockInfo = this.getBlockInfo(container)
-       1260 +      if (blockInfo && blockInfo.block && this.isAtEndOfElement(blockInfo.block)) {
-       1261 +        return this.handleNonEmptyBlockEnter(blockInfo, context.range)
-       1262 +      }
-       1263 +      
-       1264 +      // Let browser handle normal enter
-       1265 +      return false
-       1266 +    }
-       1267 +    
-       1268 +    handleBlockBackspace(blockElement) {
-       1269 +      const blockType = this.getBlockType(blockElement)
-       1270 +      const container = blockElement.parentElement
-       1271 +      const isInContainer = this.isContainerElement(container)
-       1272 +      
-       1273 +      this.log('Block context', { blockType, isInContainer })
-       1274 +      
-       1275 +      // Handle based on context - following markdown semantic rules
-       1276 +      if (isInContainer) {
-       1277 +        // Exit container
-       1278 +        return this.exitContainer(blockElement, container)
-       1279 +      } else if (blockType === 'paragraph') {
-       1280 +        // Try to merge with previous
-       1281 +        return this.mergeWithPrevious(blockElement)
-       1282 +      } else {
-       1283 +        // Reset styled block to paragraph and try to merge
-       1284 +        return this.resetBlockToParagraph(blockElement)
-       1285 +      }
-       1286 +    }
-       1287    }
-       1288   \ No newline at end of file
+       1231 +      const container = context.range.commonAncestorContainer
+       1232 +      
+       1233 +      // Priority 1: Check if we're in an empty block
+       1234 +      const emptyBlock = this.findEmptyBlock(container)
+       1235 +      if (emptyBlock) {
+       1236 +        return this.handleEmptyBlockEnter(emptyBlock)
+       1237 +      }
+       1238 +      
+       1239 +      // Priority 2: End of inline element
+       1240 +      if (this.isAtEndOfInlineElement()) {
+       1241 +        this.log('At end of inline element')
+       1242 +        return this.insertHTML('<p><br></p>')
+       1243 +      }
+       1244 +      
+       1245 +      // Priority 3: Non-empty block in container at end
+       1246 +      const blockInfo = this.getBlockInfo(container)
+       1247 +      if (blockInfo && blockInfo.block && this.isAtEndOfElement(blockInfo.block)) {
+       1248 +        return this.handleNonEmptyBlockEnter(blockInfo, context.range)
+       1249 +      }
+       1250 +      
+       1251 +      // Let browser handle normal enter
+       1252 +      return false
+       1253 +    }
+       1254 +    
+       1255 +    handleBlockBackspace(blockElement) {
+       1256 +      const blockType = this.getBlockType(blockElement)
+       1257 +      const container = blockElement.parentElement
+       1258 +      const isInContainer = this.isContainerElement(container)
+       1259 +      
+       1260 +      this.log('Block context', { blockType, isInContainer })
+       1261 +      
+       1262 +      // Handle based on context - following markdown semantic rules
+       1263 +      if (isInContainer) {
+       1264 +        // Exit container
+       1265 +        return this.exitContainer(blockElement, container)
+       1266 +      } else if (blockType === 'paragraph') {
+       1267 +        // Try to merge with previous
+       1268 +        return this.mergeWithPrevious(blockElement)
+       1269 +      } else {
+       1270 +        // Reset styled block to paragraph and try to merge
+       1271 +        return this.resetBlockToParagraph(blockElement)
+       1272 +      }
+       1273 +    }
+       1274    }
+       1275   \ No newline at end of file
 
 > handleBackspace() { // line number 973
 
@@ -1769,19 +1769,19 @@
 
 ⏺ Update(src/utils/MarkdownBlockEditor.js)
   ⎿  User rejected update to src/utils/MarkdownBlockEditor.js
-       1056        // Priority 2: End of inline element
-       1057        if (this.isAtEndOfInlineElement()) {
-       1058          this.log('At end of inline element')
-       1059 -        return this.insertHTML('<p><br></p>')
-       1059 +        if (this.useExecCommandOnly) {
-       1060 +          // Use formatBlock to ensure proper paragraph creation
-       1061 +          return this.executeCommand('formatBlock', 'p')
-       1062 +        } else {
-       1063 +          return this.insertHTML('<p><br></p>')
-       1064 +        }
-       1065        }
-       1066        
-       1067        // Priority 3: Non-empty block in container at end
+       1043        // Priority 2: End of inline element
+       1044        if (this.isAtEndOfInlineElement()) {
+       1045          this.log('At end of inline element')
+       1046 -        return this.insertHTML('<p><br></p>')
+       1046 +        if (this.useExecCommandOnly) {
+       1047 +          // Use formatBlock to ensure proper paragraph creation
+       1048 +          return this.executeCommand('formatBlock', 'p')
+       1049 +        } else {
+       1050 +          return this.insertHTML('<p><br></p>')
+       1051 +        }
+       1052        }
+       1053        
+       1054        // Priority 3: Non-empty block in container at end
 
 > formatBlock replaces the enclosing element with the specified element (p in this case), is it the expected behavior?
 
@@ -2332,4 +2332,185 @@
   [MarkdownBlockEditor] Converting LI to paragraph using formatBlock
 
   And no more crashes!
+
+> /export CaretTracking.txt
+  ⎿  Conversation exported to: CaretTracking.txt
+
+> MarkdownBlockEditor encapsulates all the markdown block logic, DOM manipulation, and execCommand operations.
+    The Vue component should only handle the reactive data flow and high-level orchestration. You shouldn't modify the vue component to add detailed 
+  logic
+
+⏺ You're absolutely right! The Vue component should only handle reactive data flow and orchestration. Adding debug logging to the Vue component was the
+  wrong approach.
+
+  Let me move the debug logging into the MarkdownBlockEditor class where it belongs, and revert the Vue component change:
+
+⏺ Update(src/components/MarkdownEditor.vue)
+  ⎿  Updated src/components/MarkdownEditor.vue with 1 removal            
+       170              
+       171            case 'Backspace':
+       172              handled = this.blockEditor.handleBackspace()
+       173 -            console.log('handleBackspace returned:', handled)
+       173              break
+       174              
+       175            case 'Enter':
+
+⏺ Now let me add the debug logging inside the MarkdownBlockEditor where it belongs:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 4 additions and 1 removal 
+        993        this.log('handleBackspace')
+        994        
+        995        const context = this.getCursorContext()
+        996 -      if (!context) return false
+        996 +      if (!context) {
+        997 +        this.log('handleBackspace: no context, returning false')
+        998 +        return false
+        999 +      }
+       1000        
+       1001        // Let browser handle range selections
+       1002        if (!context.collapsed) {
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 12 additions and 4 removals                         
+       1029        if (isEmpty && this.useExecCommandOnly && this.isBlockElement(blockElement)) {
+       1030          // Empty styled blocks should use unified conversion logic (same as enter)
+       1031          this.log('Converting empty', blockElement.tagName, 'to paragraph (unified logic)')
+       1032 -        return this.convertBlockToParagraphWithFormatBlock(blockElement)
+       1032 +        const result = this.convertBlockToParagraphWithFormatBlock(blockElement)
+       1033 +        this.log('handleBackspace: unified conversion returned', result)
+       1034 +        return result
+       1035        } else if (isInContainer) {
+       1036          this.log('Calling exitContainer')
+       1037 -        return this.exitContainer(blockElement, container)
+       1037 +        const result = this.exitContainer(blockElement, container)
+       1038 +        this.log('handleBackspace: exitContainer returned', result)
+       1039 +        return result
+       1040        } else if (blockType === 'paragraph') {
+       1041          this.log('Calling mergeWithPrevious')
+       1042 -        return this.mergeWithPrevious(blockElement)
+       1042 +        const result = this.mergeWithPrevious(blockElement)
+       1043 +        this.log('handleBackspace: mergeWithPrevious returned', result)
+       1044 +        return result
+       1045        } else {
+       1046          this.log('Calling resetBlockToParagraph for', blockElement.tagName)
+       1047 -        return this.resetBlockToParagraph(blockElement)
+       1047 +        const result = this.resetBlockToParagraph(blockElement)
+       1048 +        this.log('handleBackspace: resetBlockToParagraph returned', result)
+       1049 +        return result
+       1050        }
+       1051      }
+       1052    
+
+⏺ Perfect! Now the Vue component is clean and only handles orchestration, while all the detailed logic and debugging is properly encapsulated in the
+  MarkdownBlockEditor class.
+
+  The MarkdownBlockEditor now logs exactly what path it takes and what each method returns, so we can debug the backspace behavior without polluting the
+   Vue component with implementation details.
+
+  This maintains proper separation of concerns:
+  - Vue component: Reactive data flow, event handling, orchestration
+  - MarkdownBlockEditor: All markdown logic, DOM operations, debugging
+
+> The formatBlock works perfect for ul>li, however it doesn't work with blockquote. I found a unified logic using outdent first, then formatBlock to 
+  ensure p
+
+⏺ Excellent discovery! You've identified a key insight: different block contexts require different approaches to get to a clean paragraph.
+
+  For list items (ul>li):
+  - formatBlock('p') works directly ✅
+
+  For blockquote (blockquote>p):
+  - formatBlock('p') alone doesn't work ❌
+  - But outdent + formatBlock('p') works ✅
+
+  The outdent command removes one level of indentation/nesting, which for blockquotes means removing the blockquote wrapper, then formatBlock('p')
+  ensures it's a clean paragraph.
+
+  Let me update the unified conversion logic to handle different block contexts:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  (No changes)
+
+> I think all cases should use outdent at first
+
+⏺ You're absolutely right! Using outdent first makes perfect sense as a universal approach:
+
+  - For blockquote>p: outdent removes blockquote wrapper
+  - For ul>li: outdent removes list structure
+  - For h1, h2, etc.: outdent has no effect (already at root level)
+  - Then formatBlock('p'): Ensures everything becomes a clean paragraph
+
+  This is much cleaner than trying to detect different contexts. Let me implement the universal outdent + formatBlock('p') approach:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  (No changes)
+
+> I think the manual clearing of p>ul>li is no longer needed, outdent creates raw text node for li
+
+⏺ You're absolutely right! If outdent on list items creates raw text nodes instead of nested structures, then the manual cleanup of p>ul>li is no longer
+   needed.
+
+  The outdent command handles the structural changes properly, so we don't need to manually remove nested elements. Let me simplify the method:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 4 additions and 28 removals                                               
+       483       * Handles special cases like LI that create nested structures
+       484       */
+       485      convertBlockToParagraphWithFormatBlock(blockElement) {
+       486 -      this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
+       486 +      this.log('Converting', blockElement.tagName, 'to paragraph using outdent + formatBlock')
+       487        
+       488        // Position cursor at start of the block to convert
+       489        this.setCursorAtStart(blockElement)
+       490        
+       491 -      // Use formatBlock to convert to paragraph
+       491 +      // Universal approach: outdent first (removes containers), then formatBlock to ensure paragraph
+       492 +      this.executeCommand('outdent')
+       493        this.executeCommand('formatBlock', 'p')
+       494        
+       495 -      // Clean up any nested structures that formatBlock might create
+       496 -      const selection = window.getSelection()
+       497 -      if (selection.rangeCount > 0) {
+       498 -        const range = selection.getRangeAt(0)
+       499 -        let currentP = range.startContainer
+       500 -        
+       501 -        // Find the paragraph element
+       502 -        while (currentP && currentP !== this.editor) {
+       503 -          if (currentP.nodeType === Node.ELEMENT_NODE && currentP.tagName === 'P') {
+       504 -            // Remove any nested block elements (ul, ol, li, h1-h6, blockquote, etc.)
+       505 -            const nestedBlocks = currentP.querySelectorAll('ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote, pre')
+       506 -            nestedBlocks.forEach(element => element.remove())
+       507 -            
+       508 -            // Ensure paragraph has content
+       509 -            if (currentP.innerHTML.trim() === '') {
+       510 -              currentP.innerHTML = '<br>'
+       511 -            }
+       512 -            
+       513 -            // Position cursor at start of cleaned paragraph
+       514 -            this.setCursorAtStart(currentP)
+       515 -            break
+       516 -          }
+       517 -          currentP = currentP.parentElement
+       518 -        }
+       519 -      }
+       520 -      
+       495 +      // No manual cleanup needed - outdent creates clean structure
+       496        return true
+       497      }
+       498    
+
+⏺ Perfect! Now the unified conversion logic is much cleaner:
+
+  1. Position cursor at start of block
+  2. outdent - removes any container structure (blockquote, lists, etc.)
+  3. formatBlock('p') - ensures the result is a clean paragraph
+  4. Done - no manual cleanup needed since outdent handles the structure properly
+
+  This should work universally for:
+  - ✅ Empty H1/H2 → outdent (no effect) + formatBlock('p') → clean <p>
+  - ✅ Empty LI → outdent (exits list) + formatBlock('p') → clean <p>
+  - ✅ Empty blockquote>p → outdent (exits blockquote) + formatBlock('p') → clean <p>
+
+  Much simpler and more reliable than trying to manually clean up the various nested structures that different formatBlock operations might create!
 
