@@ -470,27 +470,15 @@ export default class MarkdownBlockEditor {
     p.innerHTML = blockElement.innerHTML || '<br>'
     
     if (this.useExecCommandOnly) {
-      // Store the position where the new paragraph should start
-      const beforePosition = this.getAbsolutePositionBefore(blockElement)
+      // Position cursor at start of the block to convert
+      this.setCursorAtStart(blockElement)
       
-      // Strategy: Select the block, delete it, then insert new paragraph at that position
-      const range = document.createRange()
-      const selection = window.getSelection()
+      // Use formatBlock to convert heading to paragraph - this preserves content
+      // and avoids the browser's auto-healing behavior that converts following elements
+      this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
+      this.executeCommand('formatBlock', 'p')
       
-      // Select the entire block element
-      range.selectNode(blockElement)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      
-      // Delete the selected block - this leaves cursor at the deletion point
-      this.deleteSelection()
-      
-      // Insert the new paragraph at the current cursor position
-      this.insertHTML(p.outerHTML)
-      
-      // Position cursor at the start of the inserted paragraph content
-      // The paragraph was inserted at beforePosition, so cursor should be at beforePosition
-      this.setAbsoluteCaretPosition(beforePosition)
+      // Cursor should already be positioned correctly at start of converted paragraph
     } else {
       // Direct DOM manipulation
       blockElement.parentNode.replaceChild(p, blockElement)
