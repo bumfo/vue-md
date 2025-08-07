@@ -186,30 +186,38 @@ export default class MarkdownBlockEditor {
                                !this.blocks.isContainerElement(container)
       
       if (isCrossContainer) {
-        // Cross-container merge
+        // Cross-container merge - matching original logic exactly
         this.log('Cross-container merge')
         
         // Store cursor position before merge
         const cursorPosition = this.dom.getTextContent(previousBlock).length
         
+        // Position cursor at end of last child in container
+        this.dom.setCaretAtEnd(previousBlock)
+        
+        // Insert content using semantic merge (text only to preserve styling)
         if (!this.blocks.isBlockEmpty(blockElement)) {
-          // Merge content into last block of container
-          this.mergeBlocks(previousBlock, blockElement)
+          const textContent = this.blocks.extractTextContent(this.dom.getInnerHTML(blockElement))
+          if (textContent.trim()) {
+            this.dom.insertText(textContent)
+            // Move cursor back to merge boundary
+            this.dom.setCaretPosition(previousBlock, cursorPosition)
+          }
         }
         
-        // Remove current block (matching original sequence)
+        // Remove current block
         this.dom.selectNode(blockElement)
         this.dom.deleteSelection()
         
         // Check for next container merging (matching original logic)
-        // Get next sibling from the container's perspective after deletion
-        const containerToCompareWith = this.blocks.isContainerElement(previousContainer) ?
-          previousContainer : previousBlock
         const nextSibling = this.blocks.isContainerElement(previousContainer) ?
           this.dom.getNextSibling(previousContainer) : this.dom.getNextSibling(previousBlock)
         
         this.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? this.dom.getTagName(nextSibling) : 'null')
         
+        const containerToCompareWith = this.blocks.isContainerElement(previousContainer) ?
+          previousContainer : previousBlock
+          
         if (nextSibling &&
             this.blocks.isContainerElement(nextSibling) &&
             this.dom.getTagName(nextSibling) === this.dom.getTagName(containerToCompareWith)) {
@@ -226,10 +234,13 @@ export default class MarkdownBlockEditor {
           this.dom.deleteSelection()
           
           this.log('mergeWithPrevious: removed next container after merge')
+          
+          // Position cursor at the merge boundary
+          this.dom.setCaretPosition(previousBlock, cursorPosition)
+        } else {
+          // Position cursor normally if no container merge
+          this.dom.setCaretPosition(previousBlock, cursorPosition)
         }
-        
-        // Position cursor at the merge boundary
-        this.dom.setCaretPosition(previousBlock, cursorPosition)
         
         return true
       } else {

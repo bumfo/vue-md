@@ -139,6 +139,15 @@ export default class DOMOperations {
     selection.addRange(range)
   }
 
+  setCaretAtEnd(element) {
+    const range = document.createRange()
+    const selection = window.getSelection()
+    range.setStart(element, element.childNodes.length)
+    range.collapse(true)
+    selection.removeAllRanges()
+    selection.addRange(range)
+  }
+
   setCaretPosition(element, position) {
     const walker = document.createTreeWalker(
       element,
