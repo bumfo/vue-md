@@ -718,7 +718,45 @@ export default class MarkdownBlockEditor {
           return true
         }
       } else {
-        // Empty paragraph - try container merging
+        // Empty paragraph - first try container merging
+        const prevSibling = blockElement.previousElementSibling
+        const nextSibling = blockElement.nextElementSibling
+        
+        // If mergeAdjacentContainers can merge (same type containers), do that
+        if (prevSibling && nextSibling &&
+            this.isContainerElement(prevSibling) && 
+            this.isContainerElement(nextSibling) &&
+            prevSibling.tagName === nextSibling.tagName) {
+          this.mergeAdjacentContainers(blockElement)
+          return true
+        }
+        
+        // Otherwise, if we have a previous container and the paragraph is truly empty,
+        // remove the paragraph and position cursor at end of last element in previous container
+        if (prevSibling && this.isContainerElement(prevSibling)) {
+          const lastChild = prevSibling.lastElementChild
+          if (lastChild && this.isBlockElement(lastChild)) {
+            const cursorPosition = lastChild.textContent.length
+            
+            // Remove the empty paragraph
+            if (this.useExecCommandOnly) {
+              const range = document.createRange()
+              const selection = window.getSelection()
+              range.selectNode(blockElement)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              this.deleteSelection()
+            } else {
+              blockElement.remove()
+            }
+            
+            // Position cursor at end of last element in previous container
+            this.setCursorPosition(lastChild, cursorPosition)
+            return true
+          }
+        }
+        
+        // Fallback: try general container merging (for same-type containers)
         this.mergeAdjacentContainers(blockElement)
         return true
       }
