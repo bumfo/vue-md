@@ -189,18 +189,47 @@ export default class MarkdownBlockEditor {
         // Cross-container merge
         this.log('Cross-container merge')
         
+        // Store cursor position before merge
+        const cursorPosition = this.dom.getTextContent(previousBlock).length
+        
         if (!this.blocks.isBlockEmpty(blockElement)) {
           // Merge content into last block of container
           this.mergeBlocks(previousBlock, blockElement)
-        } else {
-          // Just remove empty block
-          this.dom.selectNode(blockElement)
-          this.dom.deleteSelection()
-          this.dom.setCaretPosition(previousBlock, this.dom.getTextContent(previousBlock).length)
         }
         
-        // Check for container merging opportunity
-        this.mergeAdjacentContainers(previousBlock)
+        // Remove current block (matching original sequence)
+        this.dom.selectNode(blockElement)
+        this.dom.deleteSelection()
+        
+        // Check for next container merging (matching original logic)
+        // Get next sibling from the container's perspective after deletion
+        const containerToCompareWith = this.blocks.isContainerElement(previousContainer) ?
+          previousContainer : previousBlock
+        const nextSibling = this.blocks.isContainerElement(previousContainer) ?
+          this.dom.getNextSibling(previousContainer) : this.dom.getNextSibling(previousBlock)
+        
+        this.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? this.dom.getTagName(nextSibling) : 'null')
+        
+        if (nextSibling &&
+            this.blocks.isContainerElement(nextSibling) &&
+            this.dom.getTagName(nextSibling) === this.dom.getTagName(containerToCompareWith)) {
+          this.log('mergeWithPrevious: merging next container into current')
+          
+          // Move all children from next container to current container
+          while (this.dom.hasChildren(nextSibling)) {
+            const child = this.dom.getFirstChild(nextSibling)
+            containerToCompareWith.appendChild(child)
+          }
+          
+          // Remove the next container
+          this.dom.selectNode(nextSibling)
+          this.dom.deleteSelection()
+          
+          this.log('mergeWithPrevious: removed next container after merge')
+        }
+        
+        // Position cursor at the merge boundary
+        this.dom.setCaretPosition(previousBlock, cursorPosition)
         
         return true
       } else {
