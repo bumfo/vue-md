@@ -1210,17 +1210,10 @@ export default class MarkdownBlockEditor {
             selection.removeAllRanges()
             selection.addRange(range)
             
-            // Clean up the structure
-            this.executeCommand('outdent')
-            this.executeCommand('formatBlock', 'div')
-            
-            // Remove any remaining extra elements
-            range.setStartAfter(prevSibling.lastElementChild)
-            range.setEndAfter(prevSibling.nextElementSibling)
-            selection.removeAllRanges()
-            selection.addRange(range)
+            range.setStartBefore(blockElement)
+            range.setEndAfter(nextSibling)
             this.executeCommand('delete')
-            
+
             // Fix cursor position to original merge point
             if (pos && pos.lastChild) {
               range.setStartAfter(pos.lastChild)
