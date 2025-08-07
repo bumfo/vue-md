@@ -1127,10 +1127,17 @@ export default class MarkdownBlockEditor {
       this.log('handleBackspace: unified conversion returned', result)
       return result
     } else if (isInContainer) {
-      this.log('Calling exitContainer')
-      const result = this.exitContainer(blockElement, container)
-      this.log('handleBackspace: exitContainer returned', result)
-      return result
+      if (this.useExecCommandOnly) {
+        this.log('Using unified conversion logic for container exit')
+        const result = this.convertBlockToParagraphWithFormatBlock(blockElement)
+        this.log('handleBackspace: unified conversion returned', result)
+        return result
+      } else {
+        this.log('Calling exitContainer')
+        const result = this.exitContainer(blockElement, container)
+        this.log('handleBackspace: exitContainer returned', result)
+        return result
+      }
     } else if (blockType === 'paragraph') {
       this.log('Calling mergeWithPrevious')
       const result = this.mergeWithPrevious(blockElement)
