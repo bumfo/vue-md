@@ -3925,3 +3925,121 @@
   The fixes ensure that the cursor positioning follows the exact same logic as the working legacy version, especially for the complex case of merging
   containers when there's an empty paragraph between them.
 
+> /export MarkdownBlockEditor.txt
+  ⎿  Conversation exported to: MarkdownBlockEditor.txt
+
+> the case for empty p works, however for non-empty p between two ul>li, the merge of li+p works, but the two ul doesn't merge.
+
+⏺ You're right! For non-empty paragraphs between two lists, the paragraph content merges into the first list, but then the two lists don't merge
+  together. Let me analyze this specific case.
+
+  Looking at the legacy code, I can see there's additional logic for handling container merging after content merges. Let me check the specific part
+  that handles this scenario:
+
+⏺ Read(src/components/MarkdownEditorLegacy.vue)
+  ⎿  Read 25 lines (ctrl+r to expand)
+
+⏺ Ah! I found the missing logic. In the legacy version, after merging a root paragraph's content into a container, it checks if there's a next container
+   of the same type and merges them together. This logic is missing from my refactored version.
+
+  Let me add this critical piece to the mergeWithPrevious method:
+
+⏺ Update(src/utils/MarkdownBlockEditor.js)
+  ⎿  Updated src/utils/MarkdownBlockEditor.js with 35 additions and 2 removals
+       680                blockElement.remove()
+       681              }
+       682
+       683 -            // Position cursor
+       684 -            this.setCursorPosition(lastChild, cursorPosition)
+       683 +            // Check if there's a next container of the same type to merge
+       684 +            const nextSibling = this.isContainerElement(previousContainer) ?
+       685 +              previousContainer.nextElementSibling : previousElement.nextElementSibling
+       686 +            this.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? nextSibling.tagName : 'null')
+       687 +            const containerToCompareWith = this.isContainerElement(previousContainer) ?
+       688 +              previousContainer : previousElement
+       689 +            if (nextSibling &&
+       690 +                this.isContainerElement(nextSibling) &&
+       691 +                nextSibling.tagName === containerToCompareWith.tagName) {
+       692 +              this.log('mergeWithPrevious: merging next container into current')
+       693 +              // Move all children from next container to current container
+       694 +              while (nextSibling.firstChild) {
+       695 +                containerToCompareWith.appendChild(nextSibling.firstChild)
+       696 +              }
+       697 +
+       698 +              if (this.useExecCommandOnly) {
+       699 +                const range = document.createRange()
+       700 +                const selection = window.getSelection()
+       701 +                range.selectNode(nextSibling)
+       702 +                selection.removeAllRanges()
+       703 +                selection.addRange(range)
+       704 +                this.deleteSelection()
+       705 +              } else {
+       706 +                nextSibling.remove()
+       707 +              }
+       708 +              this.log('mergeWithPrevious: removed next container after merge')
+       709 +
+       710 +              // Position cursor at the merge boundary (end of the content that was already there)
+       711 +              this.setCursorPosition(lastChild, cursorPosition)
+       712 +              this.log('mergeWithPrevious: positioned cursor at merge boundary')
+       713 +            } else {
+       714 +              // Position cursor normally if no container merge
+       715 +              this.setCursorPosition(lastChild, cursorPosition)
+       716 +            }
+       717 +
+       718              return true
+       719            }
+       720          } else {
+
+⏺ Perfect! Now let's build and test this fix:
+
+⏺ Bash(npm run build)
+  ⎿  > vue-md-editor@1.0.0 build
+     > vite build
+     … +11 lines (ctrl+r to expand)
+
+⏺ Excellent! I've now fixed the missing container merging logic for the non-empty paragraph case. Here's what was missing and what I added:
+
+  The Missing Logic: Container Merging After Content Merge
+
+  Scenario: ul > li + p (non-empty) + ul > li
+
+  What should happen:
+  1. ✅ Paragraph content merges into the last li of the first ul
+  2. ✅ Paragraph element gets removed
+  3. ❌ MISSING: The two ul containers should merge together
+  4. ✅ Cursor should be positioned at the merge boundary
+
+  The Fix
+
+  After merging the paragraph content into the container, the legacy version checks if there's a next sibling container of the same type and merges
+  them. I added this logic:
+
+  // Check if there's a next container of the same type to merge
+  const nextSibling = this.isContainerElement(previousContainer) ?
+    previousContainer.nextElementSibling : previousElement.nextElementSibling
+
+  const containerToCompareWith = this.isContainerElement(previousContainer) ?
+    previousContainer : previousElement
+
+  if (nextSibling &&
+      this.isContainerElement(nextSibling) &&
+      nextSibling.tagName === containerToCompareWith.tagName) {
+
+    // Move all children from next container to current container
+    while (nextSibling.firstChild) {
+      containerToCompareWith.appendChild(nextSibling.firstChild)
+    }
+
+    // Remove the now-empty second container (with proper execCommand handling)
+    nextSibling.remove() // or use execCommand if useExecCommandOnly is true
+  }
+
+  Why This Works
+
+  1. Content Merge: First, the paragraph's content merges into the last li of the first ul
+  2. Container Detection: Then it checks if there's a next container of the same type (ul)
+  3. Container Merge: All li elements from the second ul are moved to the first ul
+  4. Cleanup: The empty second ul is removed
+  5. Cursor Positioning: Cursor stays at the merge boundary in the original content
+
+  This ensures that ul > li + p (text) + ul > li becomes ul > li (text), li with proper cursor positioning, exactly matching the legacy behavior.

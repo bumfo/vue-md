@@ -680,8 +680,41 @@ export default class MarkdownBlockEditor {
             blockElement.remove()
           }
           
-          // Position cursor
-          this.setCursorPosition(lastChild, cursorPosition)
+          // Check if there's a next container of the same type to merge
+          const nextSibling = this.isContainerElement(previousContainer) ?
+            previousContainer.nextElementSibling : previousElement.nextElementSibling
+          this.log('mergeWithPrevious: checking for next sibling to merge:', nextSibling ? nextSibling.tagName : 'null')
+          const containerToCompareWith = this.isContainerElement(previousContainer) ?
+            previousContainer : previousElement
+          if (nextSibling &&
+              this.isContainerElement(nextSibling) &&
+              nextSibling.tagName === containerToCompareWith.tagName) {
+            this.log('mergeWithPrevious: merging next container into current')
+            // Move all children from next container to current container
+            while (nextSibling.firstChild) {
+              containerToCompareWith.appendChild(nextSibling.firstChild)
+            }
+            
+            if (this.useExecCommandOnly) {
+              const range = document.createRange()
+              const selection = window.getSelection()
+              range.selectNode(nextSibling)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              this.deleteSelection()
+            } else {
+              nextSibling.remove()
+            }
+            this.log('mergeWithPrevious: removed next container after merge')
+
+            // Position cursor at the merge boundary (end of the content that was already there)
+            this.setCursorPosition(lastChild, cursorPosition)
+            this.log('mergeWithPrevious: positioned cursor at merge boundary')
+          } else {
+            // Position cursor normally if no container merge
+            this.setCursorPosition(lastChild, cursorPosition)
+          }
+          
           return true
         }
       } else {
