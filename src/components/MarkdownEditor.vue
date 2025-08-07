@@ -1,11 +1,11 @@
 <template>
   <div
-      ref="editor"
-      class="markdown-editor"
-      contenteditable="true"
-      @input="handleInput"
-      @paste="handlePaste"
-      @keydown="handleKeydown"
+    ref="editor"
+    class="markdown-editor"
+    contenteditable="true"
+    @input="handleInput"
+    @paste="handlePaste"
+    @keydown="handleKeydown"
   ></div>
 </template>
 
@@ -53,7 +53,6 @@ export default {
         }
       }
     },
-
     markdownContent: {
       get() {
         // Always compute markdown from current HTML content
@@ -75,7 +74,6 @@ export default {
       }
     }
   },
-
   created() {
     this.initializeServices()
   },
@@ -86,16 +84,16 @@ export default {
       useExecCommandOnly: this.useExecCommandOnly,
       debug: this.debug
     })
-    
+
     // Initialize from prop after DOM and services are ready
     this.markdownContent = this.value
   },
-  
+
   beforeDestroy() {
     // Clean up if needed
     this.blockEditor = null
   },
-  
+
   methods: {
     // ========== INITIALIZATION ==========
     initializeServices() {
@@ -130,7 +128,7 @@ export default {
     },
 
     // ========== EVENT HANDLERS ==========
-    
+
     handleInput(event) {
       this.handleUserHtmlChange(event.target.innerHTML)
     },
@@ -150,7 +148,7 @@ export default {
       }
 
       const markdownHtml = this.md.render(contentToInsert)
-      
+
       // Use block editor to insert HTML
       this.blockEditor.insertHTML(markdownHtml)
 
@@ -161,22 +159,22 @@ export default {
 
     handleKeydown(event) {
       let handled = false
-      
-      switch(event.key) {
+
+      switch (event.key) {
         case 'Tab':
           event.preventDefault()
           handled = this.blockEditor.handleTab()
           break
-          
+
         case 'Backspace':
           handled = this.blockEditor.handleBackspace()
           break
-          
+
         case 'Enter':
           handled = this.blockEditor.handleEnter()
           break
       }
-      
+
       if (handled) {
         event.preventDefault()
         this.$nextTick(() => {
@@ -185,7 +183,6 @@ export default {
       }
     }
   },
-
   watch: {
     value: {
       handler(newValue) {
@@ -196,14 +193,13 @@ export default {
       },
       immediate: false
     },
-    
     useExecCommandOnly(newValue) {
       // Update block editor when feature flag changes
       if (this.blockEditor) {
         this.blockEditor.useExecCommandOnly = newValue
       }
     },
-    
+
     debug(newValue) {
       // Update block editor debug mode
       if (this.blockEditor) {
