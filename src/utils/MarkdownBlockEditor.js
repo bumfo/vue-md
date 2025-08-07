@@ -72,6 +72,61 @@ export default class MarkdownBlockEditor {
     }
   }
 
+  // ========== CARET TRACKING SYSTEM ==========
+  
+  /**
+   * Calculate the absolute text position from editor start to the current cursor
+   */
+  getAbsoluteCaretPosition() {
+    const selection = window.getSelection()
+    if (selection.rangeCount === 0) return 0
+    
+    const range = selection.getRangeAt(0)
+    const preCaretRange = range.cloneRange()
+    preCaretRange.selectNodeContents(this.editor)
+    preCaretRange.setEnd(range.startContainer, range.startOffset)
+    
+    return preCaretRange.toString().length
+  }
+  
+  /**
+   * Set cursor position using absolute text offset from editor start
+   */
+  setAbsoluteCaretPosition(position) {
+    const walker = document.createTreeWalker(
+      this.editor,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    )
+    
+    let currentPos = 0
+    let targetNode = null
+    let targetOffset = 0
+    let node
+    
+    while (node = walker.nextNode()) {
+      const nodeLength = node.textContent.length
+      if (currentPos + nodeLength >= position) {
+        targetNode = node
+        targetOffset = position - currentPos
+        break
+      }
+      currentPos += nodeLength
+    }
+    
+    if (targetNode) {
+      const range = document.createRange()
+      const selection = window.getSelection()
+      range.setStart(targetNode, targetOffset)
+      range.collapse(true)
+      selection.removeAllRanges()
+      selection.addRange(range)
+      return true
+    }
+    return false
+  }
+
   setCursorAtStart(element) {
     const range = document.createRange()
     const selection = window.getSelection()
@@ -319,14 +374,105 @@ export default class MarkdownBlockEditor {
   deleteSelection() {
     return this.executeCommand('delete')
   }
+  
+  /**
+   * Merge content into a target element using semantic block operations
+   * instead of raw HTML insertion to preserve styling
+   */
+  mergeContentIntoBlock(targetElement, sourceContent, targetPosition) {
+    if (this.useExecCommandOnly) {
+      // Position cursor at the merge point in target element
+      this.setCursorPosition(targetElement, targetPosition)
+      
+      // Use insertText instead of insertHTML to preserve block styling
+      if (sourceContent.trim()) {
+        this.executeCommand('insertText', sourceContent)
+        // After insertText, cursor is at end of inserted text, but we want it at the merge boundary
+        // So we need to move it back to the original position
+        this.setCursorPosition(targetElement, targetPosition)
+      }
+    } else {
+      // Direct DOM manipulation
+      const walker = document.createTreeWalker(
+        targetElement,
+        NodeFilter.SHOW_TEXT,
+        null,
+        false
+      )
+      
+      let currentPos = 0
+      let targetNode = null
+      let targetOffset = 0
+      let node
+      
+      while (node = walker.nextNode()) {
+        const nodeLength = node.textContent.length
+        if (currentPos + nodeLength >= targetPosition) {
+          targetNode = node
+          targetOffset = targetPosition - currentPos
+          break
+        }
+        currentPos += nodeLength
+      }
+      
+      if (targetNode) {
+        const beforeText = targetNode.textContent.substring(0, targetOffset)
+        const afterText = targetNode.textContent.substring(targetOffset)
+        targetNode.textContent = beforeText + sourceContent + afterText
+        
+        // Position cursor at the merge boundary (where original content ended)
+        this.setCursorPosition(targetElement, targetPosition)
+      }
+    }
+  }
+  
+  /**
+   * Get all text content before an element in the editor
+   */
+  getTextContentBefore(element) {
+    const range = document.createRange()
+    range.selectNodeContents(this.editor)
+    range.setEnd(element, 0)
+    return range.toString()
+  }
+  
+  /**
+   * Get the absolute text position before an element starts
+   */
+  getAbsolutePositionBefore(element) {
+    const range = document.createRange()
+    range.selectNodeContents(this.editor)
+    range.setEnd(element, 0)
+    return range.toString().length
+  }
+  
+  /**
+   * Extract plain text content from HTML string, preserving basic formatting
+   */
+  extractTextContent(htmlContent) {
+    // Create a temporary element to parse the HTML
+    const temp = document.createElement('div')
+    temp.innerHTML = htmlContent
+    
+    // Get the text content, which strips HTML but preserves text
+    return temp.textContent || temp.innerText || ''
+  }
 
   // ========== BLOCK OPERATIONS - CORE LOGIC FROM LEGACY ==========
   
   resetBlockToParagraph(blockElement) {
+    this.log('resetBlockToParagraph', { 
+      element: blockElement.tagName,
+      useExecCommandOnly: this.useExecCommandOnly 
+    })
+    
     const p = document.createElement('p')
     p.innerHTML = blockElement.innerHTML || '<br>'
     
     if (this.useExecCommandOnly) {
+      // Store the position where the new paragraph should start
+      const beforePosition = this.getAbsolutePositionBefore(blockElement)
+      
       // Strategy: Select the block, delete it, then insert new paragraph at that position
       const range = document.createRange()
       const selection = window.getSelection()
@@ -342,28 +488,9 @@ export default class MarkdownBlockEditor {
       // Insert the new paragraph at the current cursor position
       this.insertHTML(p.outerHTML)
       
-      // After insertHTML, cursor is at the end of inserted content
-      // We need to move it to the start of the new paragraph
-      const newRange = selection.getRangeAt(0)
-      let insertedP = null
-      
-      // Find the inserted paragraph by walking up from current cursor position
-      let node = newRange.startContainer
-      while (node && node !== this.editor) {
-        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'P') {
-          insertedP = node
-          break
-        }
-        if (node.nodeType === Node.TEXT_NODE && node.parentElement && node.parentElement.tagName === 'P') {
-          insertedP = node.parentElement
-          break
-        }
-        node = node.parentNode
-      }
-      
-      if (insertedP) {
-        this.setCursorAtStart(insertedP)
-      }
+      // Position cursor at the start of the inserted paragraph content
+      // The paragraph was inserted at beforePosition, so cursor should be at beforePosition
+      this.setAbsoluteCaretPosition(beforePosition)
     } else {
       // Direct DOM manipulation
       blockElement.parentNode.replaceChild(p, blockElement)
@@ -612,11 +739,11 @@ export default class MarkdownBlockEditor {
       selection.removeAllRanges()
       selection.addRange(range)
       
-      // Insert content using execCommand
+      // Insert content using semantic merge
       if (this.useExecCommandOnly) {
-        this.insertHTML(currentContent)
-        // After insertHTML, cursor is at end of inserted content, but we want it at the merge boundary
-        // which is the stored cursorPosition
+        // Extract just the text content to preserve block styling
+        const textContent = this.extractTextContent(currentContent)
+        this.mergeContentIntoBlock(previousElement, textContent, cursorPosition)
       } else {
         previousElement.innerHTML += currentContent
       }
@@ -659,8 +786,6 @@ export default class MarkdownBlockEditor {
         this.mergeAdjacentContainers(previousElement)
       }
       
-      // Position cursor at merge point
-      this.setCursorPosition(previousElement, cursorPosition)
       return true
     } else if (blockElement.tagName === 'P' && !this.isContainerElement(blockElement.parentElement)) {
       // Root-level paragraph merging into container - complex logic from legacy
@@ -683,10 +808,11 @@ export default class MarkdownBlockEditor {
           selection.removeAllRanges()
           selection.addRange(range)
           
-          // Insert content
+          // Insert content using semantic merge
           if (this.useExecCommandOnly) {
-            this.insertHTML(currentContent)
-            // After insertHTML, cursor is at end of inserted content, but we want it at the merge boundary
+            // Extract just the text content to preserve block styling
+            const textContent = this.extractTextContent(currentContent)
+            this.mergeContentIntoBlock(lastChild, textContent, cursorPosition)
           } else {
             lastChild.innerHTML += currentContent
           }
@@ -867,17 +993,22 @@ export default class MarkdownBlockEditor {
     const container = blockElement.parentElement
     const isInContainer = this.isContainerElement(container)
     
-    this.log('Block context', { blockType, isInContainer })
+    this.log('Block context', { 
+      blockElement: blockElement.tagName, 
+      blockType, 
+      isInContainer,
+      useExecCommandOnly: this.useExecCommandOnly
+    })
     
     // Handle based on context - following legacy logic exactly
     if (isInContainer) {
-      // Exit container
+      this.log('Calling exitContainer')
       return this.exitContainer(blockElement, container)
     } else if (blockType === 'paragraph') {
-      // Try to merge with previous
+      this.log('Calling mergeWithPrevious')
       return this.mergeWithPrevious(blockElement)
     } else {
-      // Reset styled block to paragraph
+      this.log('Calling resetBlockToParagraph for', blockElement.tagName)
       return this.resetBlockToParagraph(blockElement)
     }
   }
