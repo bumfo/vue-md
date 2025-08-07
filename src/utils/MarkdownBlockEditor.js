@@ -1119,6 +1119,9 @@ export default class MarkdownBlockEditor {
           this.log('handleBackspace: container merge returned', result)
           return result
         }
+
+        console.log('delete on p')
+        return false
       }
 
       // Empty styled blocks should use unified conversion logic (same as enter)
