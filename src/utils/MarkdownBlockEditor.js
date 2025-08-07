@@ -1003,6 +1003,33 @@ export default class MarkdownBlockEditor {
     const isEmpty = blockElement.textContent.trim() === '' || blockElement.innerHTML === '<br>'
     
     if (isEmpty && this.useExecCommandOnly && this.isBlockElement(blockElement)) {
+      // Special case: empty paragraph between same container types - merge containers
+      if (blockElement.tagName === 'P' && !isInContainer) {
+        const prevSibling = blockElement.previousElementSibling
+        const nextSibling = blockElement.nextElementSibling
+        
+        if (prevSibling && nextSibling && 
+            this.isContainerElement(prevSibling) && 
+            this.isContainerElement(nextSibling)) {
+          this.log('Merging containers by deleting empty paragraph between them')
+          
+          // Select from end of previous container to start of next container (including boundaries)
+          const range = document.createRange()
+          const selection = window.getSelection()
+          range.setStart(prevSibling, prevSibling.childNodes.length)
+          range.setEnd(nextSibling, 0)
+          selection.removeAllRanges()
+          selection.addRange(range)
+          
+          // Delete the selection (removes empty paragraph and merges containers)
+          this.executeCommand('delete')
+          
+          const result = true
+          this.log('handleBackspace: container merge returned', result)
+          return result
+        }
+      }
+      
       // Empty styled blocks should use unified conversion logic (same as enter)
       this.log('Converting empty', blockElement.tagName, 'to paragraph (unified logic)')
       const result = this.convertBlockToParagraphWithFormatBlock(blockElement)
