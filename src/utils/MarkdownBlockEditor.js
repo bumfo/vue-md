@@ -1189,35 +1189,28 @@ export default class MarkdownBlockEditor {
           const nextContainerType = nextSibling.tagName
 
           if (prevContainerType === 'BLOCKQUOTE' && nextContainerType === 'BLOCKQUOTE') {
-            this.log('Manually merging blockquote containers with execCommand')
+            this.log('Merging blockquote containers using execCommand')
             
-            // Find the merge point for cursor positioning
+            // Find cursor position before merge
             const lastChildOfPrev = prevSibling.lastElementChild
             const cursorPosition = lastChildOfPrev ? lastChildOfPrev.textContent.length : 0
             
-            // Move all children from second blockquote to first blockquote
-            const childrenToMove = Array.from(nextSibling.children)
+            // Extract all content from the second blockquote
+            const contentToMove = nextSibling.innerHTML
             
-            for (const childToMove of childrenToMove) {
-              const childContent = childToMove.outerHTML
-              
-              // Position cursor at end of first blockquote
-              range.setStart(prevSibling, prevSibling.childNodes.length)
-              range.collapse(true)
-              selection.removeAllRanges()
-              selection.addRange(range)
-              
-              // Insert the child content using execCommand
-              this.executeCommand('insertHTML', childContent)
-              
-              // Remove the original child from second blockquote
-              range.selectNode(childToMove)
-              selection.removeAllRanges()
-              selection.addRange(range)
-              this.executeCommand('delete')
-            }
+            // Position cursor at end of first blockquote
+            range.setStart(prevSibling, prevSibling.childNodes.length)
+            range.collapse(true)
+            selection.removeAllRanges()
+            selection.addRange(range)
             
-            // Remove the empty second blockquote
+            // Insert paragraph separator first to avoid merging with existing content
+            this.executeCommand('insertParagraph')
+            
+            // Insert the content using execCommand
+            this.executeCommand('insertHTML', contentToMove)
+            
+            // Remove the second blockquote
             range.selectNode(nextSibling)
             selection.removeAllRanges()
             selection.addRange(range)
