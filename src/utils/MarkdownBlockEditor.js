@@ -785,7 +785,7 @@ export default class MarkdownBlockEditor {
         previousContainer: previousContainer ? previousContainer.tagName : 'none',
         currentContainer: currentContainer ? currentContainer.tagName : 'none'
       })
-      
+
       if (isCrossContainerMerge) {
         if (blockElement.parentElement.tagName === 'BLOCKQUOTE') {
           // Cross-container merge: root element into container (e.g., P -> BLOCKQUOTE>P)
@@ -1190,28 +1190,25 @@ export default class MarkdownBlockEditor {
 
           if (prevContainerType === 'BLOCKQUOTE' && nextContainerType === 'BLOCKQUOTE') {
             this.log('Merging blockquote containers using demo logic')
-            
+
             // Store cursor position reference
             const pos = prevSibling.lastElementChild
-            
+
             // Position cursor after last child of first blockquote
             range.setStartAfter(prevSibling.lastElementChild)
             range.collapse(true)
             selection.removeAllRanges()
             selection.addRange(range)
-            
+
             // Insert paragraph separator and content
             this.executeCommand('insertParagraph')
             this.executeCommand('insertHTML', nextSibling.innerHTML)
-            
-            // Select from after first blockquote to after second blockquote
-            range.setStartAfter(prevSibling)
+
+            range.setStartBefore(blockElement)
             range.setEndAfter(nextSibling)
             selection.removeAllRanges()
             selection.addRange(range)
-            
-            range.setStartBefore(blockElement)
-            range.setEndAfter(nextSibling)
+
             this.executeCommand('delete')
 
             // Fix cursor position to original merge point
