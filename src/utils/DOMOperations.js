@@ -39,6 +39,33 @@ export default class DOMOperations {
     return this.executeCommand('insertParagraph')
   }
 
+  // ========== Common Block Insertion Patterns ==========
+
+  insertEmptyParagraph() {
+    return this.insertHTML('<p><br></p>')
+  }
+
+  insertEmptyBlockOfType(blockTag) {
+    return this.insertHTML(`<${blockTag}><br></${blockTag}>`)
+  }
+
+  insertBlockAfter(element, blockTag = 'p') {
+    this.setCaretAfter(element)
+    return this.insertEmptyBlockOfType(blockTag)
+  }
+
+  // ========== Block Conversion Patterns ==========
+
+  convertBlockUsingFormatBlock(blockElement, newTag) {
+    this.setCaretAtStart(blockElement)
+    this.outdent()
+    return this.formatBlock(newTag)
+  }
+
+  convertBlockToParagraph(blockElement) {
+    return this.convertBlockUsingFormatBlock(blockElement, 'p')
+  }
+
   // ========== Selection/Range Operations ==========
 
   getSelection() {

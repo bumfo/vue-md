@@ -398,4 +398,145 @@ export default class MarkdownBlockModel {
 
     return null
   }
+
+  // ========== Container Operations ==========
+
+  canMergeContainers(blockElement) {
+    if (blockElement.tagName !== 'P' || !this.isBlockEmpty(blockElement)) {
+      return null
+    }
+
+    // Check if block is in a container
+    const parent = this.dom.getParentElement(blockElement)
+    if (this.isContainerElement(parent)) {
+      return null
+    }
+
+    const prevSibling = this.dom.getPreviousSibling(blockElement)
+    const nextSibling = this.dom.getNextSibling(blockElement)
+
+    if (prevSibling && nextSibling &&
+        this.isContainerElement(prevSibling) &&
+        this.isContainerElement(nextSibling)) {
+      return {
+        emptyBlock: blockElement,
+        prevContainer: prevSibling,
+        nextContainer: nextSibling
+      }
+    }
+
+    return null
+  }
+
+  getContainerMergeStrategy(prevContainer, nextContainer) {
+    const prevType = prevContainer.tagName
+    const nextType = nextContainer.tagName
+
+    if (prevType === 'BLOCKQUOTE' && nextType === 'BLOCKQUOTE') {
+      return {
+        type: 'blockquote',
+        requiresSpecialHandling: true,
+        description: 'Merge blockquotes with paragraph separator'
+      }
+    } else if ((prevType === 'UL' && nextType === 'UL') ||
+               (prevType === 'OL' && nextType === 'OL')) {
+      return {
+        type: 'list',
+        requiresSpecialHandling: false,
+        description: 'Simple list merge via selection deletion'
+      }
+    } else {
+      return {
+        type: 'mixed',
+        requiresSpecialHandling: false,
+        description: 'Simple selection deletion'
+      }
+    }
+  }
+
+  createSelectionForContainerMerge(prevContainer, nextContainer) {
+    const range = document.createRange()
+    const lastChildOfPrev = this.dom.getLastChild(prevContainer)
+    const firstChildOfNext = this.dom.getFirstChild(nextContainer)
+
+    if (lastChildOfPrev && firstChildOfNext) {
+      range.setStartAfter(lastChildOfPrev)
+      range.setEndBefore(firstChildOfNext)
+    } else {
+      // Fallback to container boundaries if no children
+      range.setStartAfter(prevContainer)
+      range.setEndBefore(nextContainer)
+    }
+
+    return range
+  }
+
+  // ========== Reusable Selection Patterns ==========
+
+  createRangeForElements(startElement, endElement, startPos = 'before', endPos = 'after') {
+    const range = document.createRange()
+    
+    if (startPos === 'before') {
+      range.setStartBefore(startElement)
+    } else if (startPos === 'after') {
+      range.setStartAfter(startElement)
+    }
+    
+    if (endPos === 'before') {
+      range.setEndBefore(endElement)
+    } else if (endPos === 'after') {
+      range.setEndAfter(endElement)
+    }
+
+    return range
+  }
+
+  applyRangeAndDelete(range) {
+    const selection = this.dom.getSelection()
+    selection.removeAllRanges()
+    selection.addRange(range)
+    return this.dom.deleteSelection()
+  }
+
+  // ========== Common Block Manipulation Patterns ==========
+
+  findAdjacentContainers(blockElement) {
+    if (blockElement.tagName !== 'P') return null
+    
+    const parent = this.dom.getParentElement(blockElement)
+    if (this.isContainerElement(parent)) return null
+
+    const prevSibling = this.dom.getPreviousSibling(blockElement)
+    const nextSibling = this.dom.getNextSibling(blockElement)
+
+    const result = {
+      prevContainer: this.isContainerElement(prevSibling) ? prevSibling : null,
+      nextContainer: this.isContainerElement(nextSibling) ? nextSibling : null,
+      block: blockElement
+    }
+
+    return result
+  }
+
+  isBetweenSimilarContainers(blockElement) {
+    const adjacent = this.findAdjacentContainers(blockElement)
+    if (!adjacent || !adjacent.prevContainer || !adjacent.nextContainer) {
+      return false
+    }
+
+    return adjacent.prevContainer.tagName === adjacent.nextContainer.tagName
+  }
+
+  getBlockPosition(blockElement) {
+    const parent = this.dom.getParentElement(blockElement)
+    const isInContainer = this.isContainerElement(parent)
+    
+    return {
+      isInContainer,
+      container: isInContainer ? parent : null,
+      containerType: isInContainer ? parent.tagName.toLowerCase() : null,
+      isFirst: !this.dom.getPreviousSibling(blockElement),
+      isLast: !this.dom.getNextSibling(blockElement)
+    }
+  }
 }

@@ -33,15 +33,7 @@ export default class MarkdownBlockEditor {
    */
   convertBlockToParagraph(blockElement) {
     this.log('Converting', blockElement.tagName, 'to paragraph (unified logic)')
-    
-    // Position cursor at start of the block to convert
-    this.dom.setCaretAtStart(blockElement)
-    
-    // Universal approach: outdent first (removes containers), then formatBlock
-    this.dom.outdent()
-    this.dom.formatBlock('p')
-    
-    return true
+    return this.dom.convertBlockToParagraph(blockElement)
   }
 
   /**
@@ -157,64 +149,8 @@ export default class MarkdownBlockEditor {
     const isStyledBlock = blockType !== 'paragraph'
     
     // Special case: empty paragraph between containers - merge them
-    if (blockElement.tagName === 'P' && !isInContainer && isEmpty) {
-      const prevSibling = this.dom.getPreviousSibling(blockElement)
-      const nextSibling = this.dom.getNextSibling(blockElement)
-      
-      if (prevSibling && nextSibling &&
-          this.blocks.isContainerElement(prevSibling) &&
-          this.blocks.isContainerElement(nextSibling)) {
-        
-        this.log('Merging containers by deleting empty paragraph between them')
-        
-        // Handle different container types
-        if (prevSibling.tagName === 'BLOCKQUOTE' && nextSibling.tagName === 'BLOCKQUOTE') {
-          // Special handling for blockquotes
-          const lastChild = this.dom.getLastChild(prevSibling)
-          
-          this.dom.setCaretAfter(lastChild)
-          this.dom.insertParagraph()
-          this.dom.insertHTML(this.dom.getInnerHTML(nextSibling))
-          
-          // Select and delete the empty paragraph and next container
-          const range = document.createRange()
-          const selection = this.dom.getSelection()
-          range.setStartBefore(blockElement)
-          range.setEndAfter(nextSibling)
-          selection.removeAllRanges()
-          selection.addRange(range)
-          this.dom.deleteSelection()
-          
-          // Fix cursor position
-          if (lastChild) {
-            this.dom.setCaretAfter(lastChild)
-          }
-        } else {
-          // For lists: simple delete works
-          const range = document.createRange()
-          const selection = this.dom.getSelection()
-          
-          const lastChildOfPrev = this.dom.getLastChild(prevSibling)
-          const firstChildOfNext = this.dom.getFirstChild(nextSibling)
-          
-          if (lastChildOfPrev && firstChildOfNext) {
-            range.setStartAfter(lastChildOfPrev)
-            range.setEndBefore(firstChildOfNext)
-          } else {
-            range.setStartAfter(prevSibling)
-            range.setEndBefore(nextSibling)
-          }
-          
-          selection.removeAllRanges()
-          selection.addRange(range)
-          this.dom.deleteSelection()
-        }
-        
-        return true
-      }
-      
-      // Empty paragraph not between containers
-      return false
+    if (this.mergeContainers(blockElement)) {
+      return true
     }
     
     // Handle styled blocks or blocks in containers
@@ -306,7 +242,7 @@ export default class MarkdownBlockEditor {
     // Priority 2: End of inline element
     if (this.blocks.isAtEndOfInlineElement()) {
       this.log('At end of inline element')
-      return this.dom.insertHTML('<p><br></p>')
+      return this.dom.insertEmptyParagraph()
     }
     
     // Priority 3: Non-empty block in container at end
@@ -317,8 +253,7 @@ export default class MarkdownBlockEditor {
         
         const newBlockTag = blockInContainer.block.tagName.toLowerCase()
         
-        this.dom.setCaretAfter(blockInContainer.block)
-        this.dom.insertHTML(`<${newBlockTag}><br></${newBlockTag}>`)
+        this.dom.insertBlockAfter(blockInContainer.block, newBlockTag)
         
         // Position cursor in new block
         const newBlock = this.dom.getNextSibling(blockInContainer.block)
@@ -337,5 +272,50 @@ export default class MarkdownBlockEditor {
   handleTab() {
     this.dom.insertHTML('&nbsp;&nbsp;&nbsp;&nbsp;')
     return true
+  }
+
+  // ========== Container Operations ==========
+
+  mergeContainers(blockElement) {
+    const mergeInfo = this.blocks.canMergeContainers(blockElement)
+    if (!mergeInfo) {
+      return false
+    }
+
+    this.log('Merging containers by deleting empty paragraph between them')
+
+    const { prevContainer, nextContainer } = mergeInfo
+    const strategy = this.blocks.getContainerMergeStrategy(prevContainer, nextContainer)
+
+    if (strategy.requiresSpecialHandling && strategy.type === 'blockquote') {
+      return this.mergeBlockquoteContainers(prevContainer, nextContainer, blockElement)
+    } else {
+      return this.mergeContainersSimple(prevContainer, nextContainer, blockElement)
+    }
+  }
+
+  mergeBlockquoteContainers(prevContainer, nextContainer, emptyBlock) {
+    const lastChild = this.dom.getLastChild(prevContainer)
+    
+    // Insert content from next container into prev container
+    this.dom.setCaretAfter(lastChild)
+    this.dom.insertParagraph()
+    this.dom.insertHTML(this.dom.getInnerHTML(nextContainer))
+    
+    // Delete the empty paragraph and next container
+    const range = this.blocks.createRangeForElements(emptyBlock, nextContainer, 'before', 'after')
+    this.blocks.applyRangeAndDelete(range)
+    
+    // Fix cursor position
+    if (lastChild) {
+      this.dom.setCaretAfter(lastChild)
+    }
+    
+    return true
+  }
+
+  mergeContainersSimple(prevContainer, nextContainer, emptyBlock) {
+    const range = this.blocks.createSelectionForContainerMerge(prevContainer, nextContainer)
+    return this.blocks.applyRangeAndDelete(range)
   }
 }
