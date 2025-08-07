@@ -993,7 +993,10 @@ export default class MarkdownBlockEditor {
     this.log('handleBackspace')
     
     const context = this.getCursorContext()
-    if (!context) return false
+    if (!context) {
+      this.log('handleBackspace: no context, returning false')
+      return false
+    }
     
     // Let browser handle range selections
     if (!context.collapsed) {
@@ -1026,16 +1029,24 @@ export default class MarkdownBlockEditor {
     if (isEmpty && this.useExecCommandOnly && this.isBlockElement(blockElement)) {
       // Empty styled blocks should use unified conversion logic (same as enter)
       this.log('Converting empty', blockElement.tagName, 'to paragraph (unified logic)')
-      return this.convertBlockToParagraphWithFormatBlock(blockElement)
+      const result = this.convertBlockToParagraphWithFormatBlock(blockElement)
+      this.log('handleBackspace: unified conversion returned', result)
+      return result
     } else if (isInContainer) {
       this.log('Calling exitContainer')
-      return this.exitContainer(blockElement, container)
+      const result = this.exitContainer(blockElement, container)
+      this.log('handleBackspace: exitContainer returned', result)
+      return result
     } else if (blockType === 'paragraph') {
       this.log('Calling mergeWithPrevious')
-      return this.mergeWithPrevious(blockElement)
+      const result = this.mergeWithPrevious(blockElement)
+      this.log('handleBackspace: mergeWithPrevious returned', result)
+      return result
     } else {
       this.log('Calling resetBlockToParagraph for', blockElement.tagName)
-      return this.resetBlockToParagraph(blockElement)
+      const result = this.resetBlockToParagraph(blockElement)
+      this.log('handleBackspace: resetBlockToParagraph returned', result)
+      return result
     }
   }
 
