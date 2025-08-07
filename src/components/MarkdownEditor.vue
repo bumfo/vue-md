@@ -12,7 +12,7 @@
 <script>
 import MarkdownIt from 'markdown-it'
 import TurndownService from 'turndown'
-import MarkdownBlockEditor from '../utils/MarkdownBlockEditor'
+import MarkdownBlockEditor from '../utils/MarkdownBlockEditor2'
 
 export default {
   name: 'MarkdownEditor',
