@@ -779,34 +779,87 @@ export default class MarkdownBlockEditor {
     // Check if this is cross-container merging (root element into container)
     const isCrossContainerMerge = this.isContainerElement(previousContainer) && !this.isContainerElement(currentContainer)
 
-    if (this.useExecCommandOnly && !isCrossContainerMerge) {
-      this.log('Using execCommand with clean HTML merge')
+    if (this.useExecCommandOnly) {
+      this.log('Using execCommand for block merging', {
+        isCrossContainerMerge,
+        previousContainer: previousContainer ? previousContainer.tagName : 'none',
+        currentContainer: currentContainer ? currentContainer.tagName : 'none'
+      })
       
-      // Extract clean content from current block
-      const cleanContent = this.extractInlineContent(blockElement)
-      const cursorPosition = previousElement.textContent.length
-      
-      // Position cursor at end of previous element
-      const range = document.createRange()
-      const selection = window.getSelection()
-      range.setStart(previousElement, previousElement.childNodes.length)
-      range.collapse(true)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      
-      // Insert clean content using execCommand
-      this.executeCommand('insertHTML', cleanContent)
-      
-      // Remove the current block
-      range.selectNode(blockElement)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      this.executeCommand('delete')
-      
-      // Fix cursor position to the merge boundary
-      this.setCursorPosition(previousElement, cursorPosition)
-      
-      return true
+      if (isCrossContainerMerge) {
+        if (blockElement.parentElement.tagName === 'BLOCKQUOTE') {
+          // Cross-container merge: root element into container (e.g., P -> BLOCKQUOTE>P)
+          this.log('Handling cross-container merge with execCommand (BLOCKQUOTE)')
+
+          // Find the target block inside the container
+          const lastChildInContainer = previousContainer.lastElementChild
+          if (!lastChildInContainer || !this.isBlockElement(lastChildInContainer)) {
+            this.log('No valid target block in container')
+            return false
+          }
+
+          // Extract content to merge
+          const contentToMerge = this.extractInlineContent(blockElement)
+          const cursorPosition = lastChildInContainer.textContent.length
+
+          // Position cursor at end of target block in container
+          const range = document.createRange()
+          const selection = window.getSelection()
+          range.setStart(lastChildInContainer, lastChildInContainer.childNodes.length)
+          range.collapse(true)
+          selection.removeAllRanges()
+          selection.addRange(range)
+
+          // Insert content using execCommand
+          this.executeCommand('insertHTML', contentToMerge)
+
+          // Remove the source block
+          range.selectNode(blockElement)
+          selection.removeAllRanges()
+          selection.addRange(range)
+          this.executeCommand('delete')
+
+          // Fix cursor position to merge boundary
+          this.setCursorPosition(lastChildInContainer, cursorPosition)
+
+          // Handle container merging if needed
+          this.mergeAdjacentContainers(lastChildInContainer)
+
+          return true
+        }
+      } else {
+        // Same-level merge: both blocks at same container level
+        this.log('Handling same-level merge with execCommand')
+
+        // Extract clean content from current block
+        const cleanContent = this.extractInlineContent(blockElement)
+        const cursorPosition = previousElement.textContent.length
+
+        // Position cursor at end of previous element
+        const range = document.createRange()
+        const selection = window.getSelection()
+        range.setStart(previousElement, previousElement.childNodes.length)
+        range.collapse(true)
+        selection.removeAllRanges()
+        selection.addRange(range)
+
+        // Insert clean content using execCommand
+        this.executeCommand('insertHTML', cleanContent)
+
+        // Remove the current block
+        range.selectNode(blockElement)
+        selection.removeAllRanges()
+        selection.addRange(range)
+        this.executeCommand('delete')
+
+        // Fix cursor position to the merge boundary
+        this.setCursorPosition(previousElement, cursorPosition)
+
+        // Handle container cleanup and merging
+        this.mergeAdjacentContainers(previousElement)
+
+        return true
+      }
     }
 
     if ((previousType === 'paragraph' || previousType === 'heading') && !isCrossContainerMerge) {
@@ -1136,9 +1189,44 @@ export default class MarkdownBlockEditor {
           const nextContainerType = nextSibling.tagName
 
           if (prevContainerType === 'BLOCKQUOTE' && nextContainerType === 'BLOCKQUOTE') {
-            this.log('Using insertParagraph for blockquote merging')
-            // For blockquotes: insertParagraph creates clean separation
-            this.executeCommand('insertParagraph')
+            this.log('Manually merging blockquote containers with execCommand')
+            
+            // Find the merge point for cursor positioning
+            const lastChildOfPrev = prevSibling.lastElementChild
+            const cursorPosition = lastChildOfPrev ? lastChildOfPrev.textContent.length : 0
+            
+            // Move all children from second blockquote to first blockquote
+            const childrenToMove = Array.from(nextSibling.children)
+            
+            for (const childToMove of childrenToMove) {
+              const childContent = childToMove.outerHTML
+              
+              // Position cursor at end of first blockquote
+              range.setStart(prevSibling, prevSibling.childNodes.length)
+              range.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              
+              // Insert the child content using execCommand
+              this.executeCommand('insertHTML', childContent)
+              
+              // Remove the original child from second blockquote
+              range.selectNode(childToMove)
+              selection.removeAllRanges()
+              selection.addRange(range)
+              this.executeCommand('delete')
+            }
+            
+            // Remove the empty second blockquote
+            range.selectNode(nextSibling)
+            selection.removeAllRanges()
+            selection.addRange(range)
+            this.executeCommand('delete')
+            
+            // Fix cursor position to the merge boundary
+            if (lastChildOfPrev) {
+              this.setCursorPosition(lastChildOfPrev, cursorPosition)
+            }
           } else {
             this.log('Using delete for list merging')
             // For lists: delete merges them properly
