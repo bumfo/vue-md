@@ -1013,11 +1013,30 @@ export default class MarkdownBlockEditor {
             this.isContainerElement(nextSibling)) {
           this.log('Merging containers by deleting empty paragraph between them')
           
-          // Select from end of previous container to start of next container (including boundaries)
+          // Unified logic: select from after last child of first container to before first child of second container
+          // This selects: </p>[</blockquote>...<blockquote>]<p> or </li>[</ul>...<ul>]<li>
           const range = document.createRange()
           const selection = window.getSelection()
-          range.setStart(prevSibling, prevSibling.childNodes.length)
-          range.setEnd(nextSibling, 0)
+          
+          const lastChildOfPrev = prevSibling.lastElementChild
+          const firstChildOfNext = nextSibling.firstElementChild
+          
+          this.log('Container merge selection:', {
+            prevContainer: prevSibling.tagName,
+            nextContainer: nextSibling.tagName,
+            lastChildOfPrev: lastChildOfPrev?.tagName,
+            firstChildOfNext: firstChildOfNext?.tagName
+          })
+          
+          if (lastChildOfPrev && firstChildOfNext) {
+            range.setStartAfter(lastChildOfPrev)  // After </p> or </li>
+            range.setEndBefore(firstChildOfNext)  // Before <p> or <li>
+          } else {
+            // Fallback to container boundaries if no children
+            range.setStartAfter(prevSibling)
+            range.setEndBefore(nextSibling)
+          }
+          
           selection.removeAllRanges()
           selection.addRange(range)
           
