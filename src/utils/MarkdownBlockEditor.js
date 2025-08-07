@@ -327,31 +327,42 @@ export default class MarkdownBlockEditor {
     p.innerHTML = blockElement.innerHTML || '<br>'
     
     if (this.useExecCommandOnly) {
-      // Use execCommand approach - store parent before deletion
-      const parent = blockElement.parentElement
+      // Strategy: Select the block, delete it, then insert new paragraph at that position
       const range = document.createRange()
       const selection = window.getSelection()
+      
+      // Select the entire block element
       range.selectNode(blockElement)
       selection.removeAllRanges()
       selection.addRange(range)
       
+      // Delete the selected block - this leaves cursor at the deletion point
+      this.deleteSelection()
+      
+      // Insert the new paragraph at the current cursor position
       this.insertHTML(p.outerHTML)
       
-      // Find the newly inserted paragraph and position cursor
-      // The paragraph should be at the selection position after insertHTML
-      const context = this.getCursorContext()
-      if (context) {
-        let element = context.container.nodeType === Node.TEXT_NODE ? 
-          context.container.parentElement : context.container
-        
-        // Walk up to find the paragraph
-        while (element && element !== this.editor) {
-          if (element.tagName === 'P') {
-            this.setCursorAtStart(element)
-            break
-          }
-          element = element.parentElement
+      // After insertHTML, cursor is at the end of inserted content
+      // We need to move it to the start of the new paragraph
+      const newRange = selection.getRangeAt(0)
+      let insertedP = null
+      
+      // Find the inserted paragraph by walking up from current cursor position
+      let node = newRange.startContainer
+      while (node && node !== this.editor) {
+        if (node.nodeType === Node.ELEMENT_NODE && node.tagName === 'P') {
+          insertedP = node
+          break
         }
+        if (node.nodeType === Node.TEXT_NODE && node.parentElement && node.parentElement.tagName === 'P') {
+          insertedP = node.parentElement
+          break
+        }
+        node = node.parentNode
+      }
+      
+      if (insertedP) {
+        this.setCursorAtStart(insertedP)
       }
     } else {
       // Direct DOM manipulation
@@ -415,8 +426,16 @@ export default class MarkdownBlockEditor {
       
       this.insertHTML(newParagraph.outerHTML)
       
-      // Update reference to the actually inserted paragraph
-      insertedParagraph = container.nextElementSibling
+      // Find the actually inserted paragraph by looking for the next P element after container
+      insertedParagraph = null
+      let next = container.nextElementSibling
+      while (next) {
+        if (next.tagName === 'P') {
+          insertedParagraph = next
+          break
+        }
+        next = next.nextElementSibling
+      }
       
       // Create new container with remaining items if needed
       if (remainingItems.length > 0) {
@@ -596,6 +615,8 @@ export default class MarkdownBlockEditor {
       // Insert content using execCommand
       if (this.useExecCommandOnly) {
         this.insertHTML(currentContent)
+        // After insertHTML, cursor is at end of inserted content, but we want it at the merge boundary
+        // which is the stored cursorPosition
       } else {
         previousElement.innerHTML += currentContent
       }
@@ -665,6 +686,7 @@ export default class MarkdownBlockEditor {
           // Insert content
           if (this.useExecCommandOnly) {
             this.insertHTML(currentContent)
+            // After insertHTML, cursor is at end of inserted content, but we want it at the merge boundary
           } else {
             lastChild.innerHTML += currentContent
           }
