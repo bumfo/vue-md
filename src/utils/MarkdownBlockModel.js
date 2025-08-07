@@ -402,6 +402,7 @@ export default class MarkdownBlockModel {
   // ========== Container Operations ==========
 
   canMergeContainers(blockElement) {
+    // Only for EMPTY paragraphs not in containers (matching original logic)
     if (blockElement.tagName !== 'P' || !this.isBlockEmpty(blockElement)) {
       return null
     }
@@ -419,7 +420,7 @@ export default class MarkdownBlockModel {
         this.isContainerElement(prevSibling) &&
         this.isContainerElement(nextSibling)) {
       return {
-        emptyBlock: blockElement,
+        block: blockElement,
         prevContainer: prevSibling,
         nextContainer: nextSibling
       }

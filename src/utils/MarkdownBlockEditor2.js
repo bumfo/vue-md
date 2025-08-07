@@ -148,17 +148,29 @@ export default class MarkdownBlockEditor {
     const isEmpty = this.blocks.isBlockEmpty(blockElement)
     const isStyledBlock = blockType !== 'paragraph'
     
-    // Special case: empty paragraph between containers - merge them
-    if (this.mergeContainers(blockElement)) {
-      return true
-    }
-    
-    // Handle styled blocks or blocks in containers
-    if ((isEmpty || isStyledBlock) && this.blocks.isBlockElement(blockElement)) {
+    // Match original logic structure: handle blocks that are empty OR styled
+    if (this.blocks.isBlockElement(blockElement) && (isEmpty || isStyledBlock)) {
+      // Special case: empty paragraph between containers - merge them
+      if (blockElement.tagName === 'P' && !isInContainer) {
+        if (this.mergeContainers(blockElement)) {
+          return true
+        }
+        // Original behavior: empty paragraph that can't merge containers returns false
+        this.log('Empty paragraph with no container merge - let browser handle')
+        return false
+      }
+
+      // Convert styled blocks to paragraph
       this.log('Converting block to paragraph')
       return this.convertBlockToParagraph(blockElement)
     }
     
+    // Match original: ANY block in container converts to paragraph (not just empty/styled)
+    if (isInContainer) {
+      this.log('Converting block in container to paragraph')
+      return this.convertBlockToParagraph(blockElement)
+    }
+
     // Handle merging with previous block (paragraph at root level)
     if (blockType === 'paragraph' && !isInContainer) {
       this.log('Merging with previous block')
@@ -284,13 +296,13 @@ export default class MarkdownBlockEditor {
 
     this.log('Merging containers by deleting empty paragraph between them')
 
-    const { prevContainer, nextContainer } = mergeInfo
+    const { block, prevContainer, nextContainer } = mergeInfo
     const strategy = this.blocks.getContainerMergeStrategy(prevContainer, nextContainer)
 
     if (strategy.requiresSpecialHandling && strategy.type === 'blockquote') {
-      return this.mergeBlockquoteContainers(prevContainer, nextContainer, blockElement)
+      return this.mergeBlockquoteContainers(prevContainer, nextContainer, block)
     } else {
-      return this.mergeContainersSimple(prevContainer, nextContainer, blockElement)
+      return this.mergeContainersSimple(prevContainer, nextContainer, block)
     }
   }
 
