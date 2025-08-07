@@ -170,6 +170,7 @@ export default {
           
         case 'Backspace':
           handled = this.blockEditor.handleBackspace()
+          console.log('handleBackspace returned:', handled)
           break
           
         case 'Enter':

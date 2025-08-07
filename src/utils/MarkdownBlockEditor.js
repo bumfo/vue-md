@@ -466,23 +466,55 @@ export default class MarkdownBlockEditor {
       useExecCommandOnly: this.useExecCommandOnly 
     })
     
-    const p = document.createElement('p')
-    p.innerHTML = blockElement.innerHTML || '<br>'
-    
     if (this.useExecCommandOnly) {
-      // Position cursor at start of the block to convert
-      this.setCursorAtStart(blockElement)
-      
-      // Use formatBlock to convert heading to paragraph - this preserves content
-      // and avoids the browser's auto-healing behavior that converts following elements
-      this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
-      this.executeCommand('formatBlock', 'p')
-      
-      // Cursor should already be positioned correctly at start of converted paragraph
+      return this.convertBlockToParagraphWithFormatBlock(blockElement)
     } else {
       // Direct DOM manipulation
+      const p = document.createElement('p')
+      p.innerHTML = blockElement.innerHTML || '<br>'
       blockElement.parentNode.replaceChild(p, blockElement)
       this.setCursorAtStart(p)
+      return true
+    }
+  }
+  
+  /**
+   * Convert any block element to paragraph using formatBlock with cleanup
+   * Handles special cases like LI that create nested structures
+   */
+  convertBlockToParagraphWithFormatBlock(blockElement) {
+    this.log('Converting', blockElement.tagName, 'to paragraph using formatBlock')
+    
+    // Position cursor at start of the block to convert
+    this.setCursorAtStart(blockElement)
+    
+    // Use formatBlock to convert to paragraph
+    this.executeCommand('formatBlock', 'p')
+    
+    // Clean up any nested structures that formatBlock might create
+    const selection = window.getSelection()
+    if (selection.rangeCount > 0) {
+      const range = selection.getRangeAt(0)
+      let currentP = range.startContainer
+      
+      // Find the paragraph element
+      while (currentP && currentP !== this.editor) {
+        if (currentP.nodeType === Node.ELEMENT_NODE && currentP.tagName === 'P') {
+          // Remove any nested block elements (ul, ol, li, h1-h6, blockquote, etc.)
+          const nestedBlocks = currentP.querySelectorAll('ul, ol, li, h1, h2, h3, h4, h5, h6, blockquote, pre')
+          nestedBlocks.forEach(element => element.remove())
+          
+          // Ensure paragraph has content
+          if (currentP.innerHTML.trim() === '') {
+            currentP.innerHTML = '<br>'
+          }
+          
+          // Position cursor at start of cleaned paragraph
+          this.setCursorAtStart(currentP)
+          break
+        }
+        currentP = currentP.parentElement
+      }
     }
     
     return true
@@ -988,8 +1020,14 @@ export default class MarkdownBlockEditor {
       useExecCommandOnly: this.useExecCommandOnly
     })
     
-    // Handle based on context - following legacy logic exactly
-    if (isInContainer) {
+    // Handle based on context - check for empty blocks first
+    const isEmpty = blockElement.textContent.trim() === '' || blockElement.innerHTML === '<br>'
+    
+    if (isEmpty && this.useExecCommandOnly && this.isBlockElement(blockElement)) {
+      // Empty styled blocks should use unified conversion logic (same as enter)
+      this.log('Converting empty', blockElement.tagName, 'to paragraph (unified logic)')
+      return this.convertBlockToParagraphWithFormatBlock(blockElement)
+    } else if (isInContainer) {
       this.log('Calling exitContainer')
       return this.exitContainer(blockElement, container)
     } else if (blockType === 'paragraph') {
@@ -1095,7 +1133,13 @@ export default class MarkdownBlockEditor {
     const { block, container } = blockInfo
 
     if (container) {
-      // Split or exit container
+      // Special handling for empty styled blocks in containers - convert to paragraph and exit
+      if (this.useExecCommandOnly && this.isBlockElement(block)) {
+        this.log('Converting empty', block.tagName, 'to paragraph in container')
+        return this.convertBlockToParagraphWithFormatBlock(block)
+      }
+      
+      // For other containers or DOM manipulation path
       const isLastChild = !block.nextElementSibling
       if (isLastChild) {
         return this.exitContainer(block, container)
