@@ -18,60 +18,6 @@ export default class MarkdownBlockEditor {
     }
   }
 
-  /**
-   * Debug helper to visualize selection boundaries in HTML
-   */
-  debugSelection(description = 'Selection') {
-    if (!this.debug) return
-
-    const selection = window.getSelection()
-    if (selection.rangeCount === 0) {
-      this.log(description + ': No selection')
-      return
-    }
-
-    const range = selection.getRangeAt(0)
-    const startContainer = range.startContainer
-    const endContainer = range.endContainer
-
-    // Get the HTML representation around the selection
-    let html = this.editor.innerHTML
-
-    // Insert markers to show selection boundaries
-    // We'll work backwards to avoid offset changes
-    const endOffset = this.getAbsoluteOffset(endContainer, range.endOffset)
-    const startOffset = this.getAbsoluteOffset(startContainer, range.startOffset)
-
-    if (endOffset >= 0 && startOffset >= 0) {
-      html = html.slice(0, endOffset) + ']' + html.slice(endOffset)
-      html = html.slice(0, startOffset) + '[' + html.slice(startOffset)
-      this.log(description + ':', html)
-    } else {
-      this.log(description + ': Could not determine offsets')
-    }
-  }
-
-  /**
-   * Get absolute character offset in editor innerHTML
-   */
-  getAbsoluteOffset(container, offset) {
-    const walker = document.createTreeWalker(
-      this.editor,
-      NodeFilter.SHOW_TEXT,
-      null,
-      false
-    )
-
-    let currentPos = 0
-    let node
-    while (node = walker.nextNode()) {
-      if (node === container) {
-        return currentPos + offset
-      }
-      currentPos += node.textContent.length
-    }
-    return -1
-  }
 
   // ========== ELEMENT TYPE CHECKING ==========
 
@@ -446,25 +392,6 @@ export default class MarkdownBlockEditor {
     }
   }
 
-  /**
-   * Get all text content before an element in the editor
-   */
-  getTextContentBefore(element) {
-    const range = document.createRange()
-    range.selectNodeContents(this.editor)
-    range.setEnd(element, 0)
-    return range.toString()
-  }
-
-  /**
-   * Get the absolute text position before an element starts
-   */
-  getAbsolutePositionBefore(element) {
-    const range = document.createRange()
-    range.selectNodeContents(this.editor)
-    range.setEnd(element, 0)
-    return range.toString().length
-  }
 
   /**
    * Extract plain text content from HTML string, preserving basic formatting
@@ -504,155 +431,6 @@ export default class MarkdownBlockEditor {
     return true
   }
 
-  exitContainer(blockElement, container) {
-    this.log('exitContainer', {block: blockElement.tagName, container: container.tagName})
-
-    const content = this.extractInlineContent(blockElement)
-    const newParagraph = document.createElement('p')
-    newParagraph.innerHTML = content || '<br>'
-
-    // Collect remaining items after the block
-    const remainingItems = []
-    let nextItem = blockElement.nextElementSibling
-    while (nextItem) {
-      remainingItems.push(nextItem.cloneNode(true))
-      const temp = nextItem.nextElementSibling
-      // Use execCommand to remove
-      const range = document.createRange()
-      const selection = window.getSelection()
-      range.selectNode(nextItem)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      this.deleteSelection()
-      nextItem = temp
-    }
-
-    // Remove the current block
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.selectNode(blockElement)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    this.deleteSelection()
-
-    // Store a reference for later use
-    let insertedParagraph = newParagraph
-
-    // Insert new paragraph after container
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.setStartAfter(container)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-
-    this.insertHTML(newParagraph.outerHTML)
-
-    // Find the actually inserted paragraph by looking for the next P element after container
-    insertedParagraph = null
-    let next = container.nextElementSibling
-    while (next) {
-      if (next.tagName === 'P') {
-        insertedParagraph = next
-        break
-      }
-      next = next.nextElementSibling
-    }
-
-    // Create new container with remaining items if needed
-    if (remainingItems.length > 0) {
-      const newContainer = document.createElement(container.tagName)
-      remainingItems.forEach(item => newContainer.appendChild(item))
-
-      if (insertedParagraph) {
-        range.setStartAfter(insertedParagraph)
-        range.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(range)
-        this.insertHTML(newContainer.outerHTML)
-      }
-    }
-
-    // Clean up empty container
-    if (container.children.length === 0) {
-      const range = document.createRange()
-      const selection = window.getSelection()
-      range.selectNode(container)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      this.deleteSelection()
-    }
-
-    // Check for container merging after the operation, but preserve split from container exits
-    if (insertedParagraph) {
-      this.mergeAdjacentContainers(insertedParagraph, true) // preserveSplit=true
-
-      // Position cursor in the new paragraph
-      this.setCursorAtStart(insertedParagraph)
-    }
-
-    return true
-  }
-
-  splitContainer(blockElement, container) {
-    const containerType = container.tagName.toLowerCase()
-
-    // Collect elements after the block
-    const remainingElements = []
-    let nextSibling = blockElement.nextElementSibling
-    while (nextSibling) {
-      remainingElements.push(nextSibling.cloneNode(true))
-      const temp = nextSibling.nextElementSibling
-      const range = document.createRange()
-      const selection = window.getSelection()
-      range.selectNode(nextSibling)
-      selection.removeAllRanges()
-      selection.addRange(range)
-      this.deleteSelection()
-      nextSibling = temp
-    }
-
-    // Remove the empty block
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.selectNode(blockElement)
-    selection.removeAllRanges()
-    selection.addRange(range)
-    this.deleteSelection()
-
-    // Create new paragraph
-    const range = document.createRange()
-    const selection = window.getSelection()
-    range.setStartAfter(container)
-    range.collapse(true)
-    selection.removeAllRanges()
-    selection.addRange(range)
-
-    this.insertHTML('<p><br></p>')
-
-    // Create new container with remaining elements
-    if (remainingElements.length > 0) {
-      const newContainer = document.createElement(containerType)
-      remainingElements.forEach(element => newContainer.appendChild(element))
-
-      const insertedP = container.nextElementSibling
-      if (insertedP) {
-        range.setStartAfter(insertedP)
-        range.collapse(true)
-        selection.removeAllRanges()
-        selection.addRange(range)
-        this.insertHTML(newContainer.outerHTML)
-      }
-    }
-
-    // Position cursor
-    const insertedP = container.nextElementSibling
-    if (insertedP) {
-      this.setCursorAtStart(insertedP)
-    }
-
-    return true
-  }
 
   mergeWithPrevious(blockElement) {
     this.log('mergeWithPrevious', {
@@ -1053,9 +831,6 @@ export default class MarkdownBlockEditor {
           selection.removeAllRanges()
           selection.addRange(range)
 
-          // Debug: show the actual selection boundaries
-          this.debugSelection('Container merge selection')
-
           // Different strategies based on container type
           const prevContainerType = prevSibling.tagName
           const nextContainerType = nextSibling.tagName
@@ -1225,19 +1000,9 @@ export default class MarkdownBlockEditor {
     const {block, container} = blockInfo
 
     if (container) {
-      // Special handling for empty styled blocks in containers - convert to paragraph and exit
-      if (this.isBlockElement(block)) {
-        this.log('Converting empty', block.tagName, 'to paragraph in container')
-        return this.convertBlockToParagraphWithFormatBlock(block)
-      }
-
-      // For other containers or DOM manipulation path
-      const isLastChild = !block.nextElementSibling
-      if (isLastChild) {
-        return this.exitContainer(block, container)
-      } else {
-        return this.splitContainer(block, container)
-      }
+      // Use unified conversion for all container exits
+      this.log('Converting empty', block.tagName, 'to paragraph in container')
+      return this.convertBlockToParagraphWithFormatBlock(block)
     } else {
       // Reset to paragraph
       return this.resetBlockToParagraph(block)
