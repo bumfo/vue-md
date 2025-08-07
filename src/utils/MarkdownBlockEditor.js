@@ -1189,36 +1189,44 @@ export default class MarkdownBlockEditor {
           const nextContainerType = nextSibling.tagName
 
           if (prevContainerType === 'BLOCKQUOTE' && nextContainerType === 'BLOCKQUOTE') {
-            this.log('Merging blockquote containers using execCommand')
+            this.log('Merging blockquote containers using demo logic')
             
-            // Find cursor position before merge
-            const lastChildOfPrev = prevSibling.lastElementChild
-            const cursorPosition = lastChildOfPrev ? lastChildOfPrev.textContent.length : 0
+            // Store cursor position reference
+            const pos = prevSibling.lastElementChild
             
-            // Extract all content from the second blockquote
-            const contentToMove = nextSibling.innerHTML
-            
-            // Position cursor at end of first blockquote
-            range.setStart(prevSibling, prevSibling.childNodes.length)
+            // Position cursor after last child of first blockquote
+            range.setStartAfter(prevSibling.lastElementChild)
             range.collapse(true)
             selection.removeAllRanges()
             selection.addRange(range)
             
-            // Insert paragraph separator first to avoid merging with existing content
+            // Insert paragraph separator and content
             this.executeCommand('insertParagraph')
+            this.executeCommand('insertHTML', nextSibling.innerHTML)
             
-            // Insert the content using execCommand
-            this.executeCommand('insertHTML', contentToMove)
+            // Select from after first blockquote to after second blockquote
+            range.setStartAfter(prevSibling)
+            range.setEndAfter(nextSibling)
+            selection.removeAllRanges()
+            selection.addRange(range)
             
-            // Remove the second blockquote
-            range.selectNode(nextSibling)
+            // Clean up the structure
+            this.executeCommand('outdent')
+            this.executeCommand('formatBlock', 'div')
+            
+            // Remove any remaining extra elements
+            range.setStartAfter(prevSibling.lastElementChild)
+            range.setEndAfter(prevSibling.nextElementSibling)
             selection.removeAllRanges()
             selection.addRange(range)
             this.executeCommand('delete')
             
-            // Fix cursor position to the merge boundary
-            if (lastChildOfPrev) {
-              this.setCursorPosition(lastChildOfPrev, cursorPosition)
+            // Fix cursor position to original merge point
+            if (pos && pos.lastChild) {
+              range.setStartAfter(pos.lastChild)
+              range.collapse(true)
+              selection.removeAllRanges()
+              selection.addRange(range)
             }
           } else {
             this.log('Using delete for list merging')
