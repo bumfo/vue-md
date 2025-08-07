@@ -516,12 +516,10 @@ export default class MarkdownBlockEditor {
   // ========== BLOCK OPERATIONS - CORE LOGIC FROM LEGACY ==========
   
   resetBlockToParagraph(blockElement) {
-    this.log('resetBlockToParagraph', { 
-      element: blockElement.tagName,
-      useExecCommandOnly: this.useExecCommandOnly 
-    })
+    this.log('resetBlockToParagraph: using unified conversion logic for', blockElement.tagName)
     
     if (this.useExecCommandOnly) {
+      // Use the same unified logic as Enter key handling
       return this.convertBlockToParagraphWithFormatBlock(blockElement)
     } else {
       // Direct DOM manipulation
@@ -1054,10 +1052,11 @@ export default class MarkdownBlockEditor {
       useExecCommandOnly: this.useExecCommandOnly
     })
     
-    // Handle based on context - check for empty blocks first
+    // Handle based on context - check for styled blocks first (empty or non-empty)
     const isEmpty = blockElement.textContent.trim() === '' || blockElement.innerHTML === '<br>'
+    const isStyledBlock = this.getBlockType(blockElement) !== 'paragraph'
     
-    if (isEmpty && this.useExecCommandOnly && this.isBlockElement(blockElement)) {
+    if (this.useExecCommandOnly && this.isBlockElement(blockElement) && (isEmpty || isStyledBlock)) {
       // Special case: empty paragraph between same container types - merge containers
       if (blockElement.tagName === 'P' && !isInContainer) {
         const prevSibling = blockElement.previousElementSibling
