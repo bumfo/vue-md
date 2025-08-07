@@ -227,7 +227,11 @@ export default class MarkdownBlockEditor {
   // ========== POSITION CHECKING ==========
 
   isAtBlockStart(container, offset) {
-    if (offset !== 0) return {atStart: false}
+    // Quick check: if we're in a text node and not at the start, check if there's only whitespace before
+    if (offset !== 0 && container.nodeType === Node.TEXT_NODE) {
+      const textBefore = container.textContent.substring(0, offset)
+      if (/[^ \n]/.test(textBefore)) return {atStart: false}
+    }
 
     let element = container.nodeType === Node.TEXT_NODE ? container.parentElement : container
 
