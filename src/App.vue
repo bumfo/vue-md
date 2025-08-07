@@ -77,8 +77,8 @@ console.log("Hello World!");
 \`\`\``,
       viewMode: 'editor',
       md: null,
-      useExecCommandOnly: true,
-      debugMode: false
+      useExecCommandOnly: false,
+      debugMode: true,
     }
   },
   computed: {
