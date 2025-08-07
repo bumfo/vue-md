@@ -1098,8 +1098,19 @@ export default class MarkdownBlockEditor {
           // Debug: show the actual selection boundaries
           this.debugSelection('Container merge selection')
           
-          // Delete the selection (removes empty paragraph and merges containers)
-          this.executeCommand('delete')
+          // Different strategies based on container type
+          const prevContainerType = prevSibling.tagName
+          const nextContainerType = nextSibling.tagName
+          
+          if (prevContainerType === 'BLOCKQUOTE' && nextContainerType === 'BLOCKQUOTE') {
+            this.log('Using insertParagraph for blockquote merging')
+            // For blockquotes: insertParagraph creates clean separation
+            this.executeCommand('insertParagraph')
+          } else {
+            this.log('Using delete for list merging')
+            // For lists: delete merges them properly
+            this.executeCommand('delete')
+          }
           
           const result = true
           this.log('handleBackspace: container merge returned', result)
